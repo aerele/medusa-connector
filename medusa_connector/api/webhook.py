@@ -1,6 +1,13 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
+"""Centralised inbound webhook receiver.
+
+Responsibilities are deliberately narrow and fast: authenticate the request,
+dedupe it, persist a Medusa Webhook Log row, and enqueue background processing.
+No business logic runs here — that lives in the dispatcher and handlers.
+"""
+
 import base64
 import hashlib
 import hmac
@@ -13,13 +20,10 @@ EVENT_ID_HEADER = "X-Medusa-Event-Id"
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def receive() -> dict:
-	"""Guest endpoint that receives, verifies, logs and enqueues a Medusa webhook.
+	"""Receive, authenticate, log and enqueue a Medusa webhook.
 
-	URL: ``/api/method/medusa_connector.api.webhook.receive``
-
-	The handler stays fast: verify the HMAC signature over the raw body, dedupe
-	on the Medusa event id, persist a Medusa Webhook Log row, enqueue dispatch,
-	and return. All business logic runs in the background job.
+	URL: ``/api/method/medusa_connector.api.webhook.receive`` (optionally with a
+	``?token=`` query param used for authenticity when the sender cannot sign).
 	"""
 	settings = frappe.get_cached_doc("Medusa Settings")
 
@@ -30,15 +34,15 @@ def receive() -> dict:
 	raw = frappe.request.data or b""
 	headers = dict(frappe.request.headers)
 
-	signature_valid = verify_signature(settings, raw, headers)
-	if settings.verify_signatures and not signature_valid:
+	authentic = authenticate(settings, raw, headers)
+	if settings.verify_signatures and not authentic:
 		_log(
 			settings,
 			raw,
 			headers,
 			status="Rejected",
 			signature_valid=False,
-			error="Invalid or missing signature",
+			error="Invalid or missing signature/token",
 		)
 		frappe.local.response["http_status_code"] = 401
 		return {"status": "rejected"}
@@ -60,7 +64,7 @@ def receive() -> dict:
 		raw,
 		headers,
 		status="Queued",
-		signature_valid=signature_valid,
+		signature_valid=authentic,
 		event_id=event_id,
 		event_name=event_name,
 	)
@@ -75,31 +79,39 @@ def receive() -> dict:
 	return {"status": "accepted", "log": log.name}
 
 
-def verify_signature(settings, raw: bytes, headers: dict) -> bool:
-	"""Verify the HMAC-SHA256 signature over the exact raw request body.
+def authenticate(settings, raw: bytes, headers: dict) -> bool:
+	"""Return True if the request proves it came from the configured Medusa.
 
-	Mirrors Frappe's own webhook signing (base64/hex of ``hmac_sha256(secret, body)``)
-	and compares in constant time.
+	Two mechanisms, in order of strength:
+
+	1. **HMAC signature** header — used when the sender can sign (a custom
+	   subscriber). The digest is ``hmac_sha256(secret, raw_body)``.
+	2. **URL token** — used by the webhooks plugin, which cannot sign. The secret
+	   is embedded as ``?token=`` in the registered endpoint and compared here.
+
+	Both use constant-time comparison. With no secret configured, authentication
+	fails closed (so ``verify_signatures`` must be off for unauthenticated setups).
 	"""
 	secret = settings.get_password("webhook_secret", raise_exception=False)
 	if not secret:
 		return False
 
-	sent = headers.get(settings.webhook_signature_header)
-	if not sent:
-		return False
+	sent = (headers.get(settings.webhook_signature_header) or "").strip()
+	if sent:
+		return _verify_hmac(secret, raw, sent, settings.webhook_signature_encoding)
 
+	token = frappe.request.args.get("token") if frappe.request else None
+	if token:
+		return hmac.compare_digest(token, secret)
+
+	return False
+
+
+def _verify_hmac(secret: str, raw: bytes, sent: str, encoding: str) -> bool:
 	digest = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).digest()
-	if settings.webhook_signature_encoding == "hex":
-		expected = digest.hex()
-	else:
-		expected = base64.b64encode(digest).decode()
-
-	# Tolerate a common ``sha256=`` prefix used by some subscribers.
-	sent = sent.strip()
+	expected = digest.hex() if encoding == "hex" else base64.b64encode(digest).decode()
 	if sent.startswith("sha256="):
 		sent = sent[len("sha256=") :]
-
 	return hmac.compare_digest(sent, expected)
 
 

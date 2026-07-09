@@ -3,19 +3,33 @@
 
 frappe.ui.form.on("Medusa Settings", {
 	refresh(frm) {
-		frm.add_custom_button(__("Test Connection"), () => {
+		frm.add_custom_button(__("Sync Webhooks"), () => {
 			frappe.call({
-				method: "medusa_connector.medusa_connector.doctype.medusa_settings.medusa_settings.test_connection",
+				method: "medusa_connector.medusa_connector.doctype.medusa_settings.medusa_settings.sync_webhooks",
 				freeze: true,
-				freeze_message: __("Testing connection…"),
+				freeze_message: __("Syncing webhooks with Medusa…"),
 				callback: (r) => {
-					if (r.message) {
-						frappe.show_alert({
-							message: r.message.message || __("Done"),
-							indicator: r.message.status === "Connected" ? "green" : "red",
+					const m = r.message || {};
+					frm.reload_doc();
+					if (m.status === "Installed") {
+						frappe.show_alert({ message: m.message, indicator: "green" });
+					} else if (m.status === "Busy") {
+						frappe.show_alert({ message: m.message, indicator: "blue" });
+					} else if (m.status === "Not Installed") {
+						frappe.msgprint({
+							title: __("Medusa Webhooks Plugin Not Installed"),
+							message: m.instructions || m.message,
+							indicator: "orange",
+						});
+					} else {
+						frappe.msgprint({
+							title: __("Webhook Sync Failed"),
+							message:
+								(m.instructions ? m.instructions + "<hr>" : "") +
+								(m.message || __("Unknown error")),
+							indicator: "red",
 						});
 					}
-					frm.reload_doc();
 				},
 			});
 		});

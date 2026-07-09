@@ -156,7 +156,14 @@ use_json_request_body = True
 scheduler_events = {
 	"hourly_long": [
 		"medusa_connector.medusa.client.scheduled_health_check",
+		"medusa_connector.medusa.services.webhook_sync.scheduled_webhook_sync",
 	],
+	"cron": {
+		# Retry failed webhook events that still have attempts remaining.
+		"*/10 * * * *": [
+			"medusa_connector.webhook.dispatch.retry_failed_webhooks",
+		],
+	},
 }
 
 # Testing
