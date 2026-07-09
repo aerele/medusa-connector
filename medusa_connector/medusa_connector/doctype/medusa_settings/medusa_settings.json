@@ -1,0 +1,189 @@
+{
+ "actions": [],
+ "creation": "2026-07-09 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "section_connection",
+  "connection_mode",
+  "medusa_base_url",
+  "graphql_url",
+  "admin_api_key",
+  "column_break_conn",
+  "pass_through_auth",
+  "request_timeout",
+  "section_status",
+  "connection_status",
+  "last_connection_test",
+  "last_connection_message",
+  "section_webhook",
+  "webhook_secret",
+  "webhook_receiver_url",
+  "webhook_signature_header",
+  "column_break_wh",
+  "webhook_signature_encoding",
+  "verify_signatures",
+  "enable_webhook_processing"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "section_connection",
+   "fieldtype": "Section Break",
+   "label": "Connection"
+  },
+  {
+   "default": "REST",
+   "description": "How the connector talks to Medusa. REST uses Medusa's built-in Admin API (no extra setup). GraphQL requires a GraphQL plugin/wrapper installed on your Medusa server.",
+   "fieldname": "connection_mode",
+   "fieldtype": "Select",
+   "label": "Connection Mode",
+   "options": "REST\nGraphQL"
+  },
+  {
+   "depends_on": "eval:doc.connection_mode=='REST'",
+   "description": "Base URL of your Medusa server, e.g. https://your-medusa-host (no trailing slash, no /app). Used for REST Admin API calls.",
+   "fieldname": "medusa_base_url",
+   "fieldtype": "Data",
+   "label": "Medusa Base URL",
+   "options": "URL"
+  },
+  {
+   "depends_on": "eval:doc.connection_mode=='GraphQL'",
+   "description": "GraphQL endpoint of the wrapper (usually ends in /graphql). ⚠ Medusa v2 has NO built-in GraphQL — verify a GraphQL plugin/wrapper is installed and running in your Medusa app before using this mode.",
+   "fieldname": "graphql_url",
+   "fieldtype": "Data",
+   "label": "GraphQL URL",
+   "options": "URL"
+  },
+  {
+   "description": "Static Medusa admin API key, sent in the Authorization header.",
+   "fieldname": "admin_api_key",
+   "fieldtype": "Password",
+   "label": "Admin API Key"
+  },
+  {
+   "fieldname": "column_break_conn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Forward the Authorization header through the wrapper. Disable if the wrapper injects its own auth.",
+   "fieldname": "pass_through_auth",
+   "fieldtype": "Check",
+   "label": "Pass Through Auth"
+  },
+  {
+   "default": "30",
+   "fieldname": "request_timeout",
+   "fieldtype": "Int",
+   "label": "Request Timeout (s)"
+  },
+  {
+   "fieldname": "section_status",
+   "fieldtype": "Section Break",
+   "label": "Connection Status"
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "connection_status",
+   "fieldtype": "Select",
+   "label": "Connection Status",
+   "options": "Unknown\nConnected\nAuth Failed\nError",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_connection_test",
+   "fieldtype": "Datetime",
+   "label": "Last Connection Test",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_connection_message",
+   "fieldtype": "Small Text",
+   "label": "Last Connection Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_webhook",
+   "fieldtype": "Section Break",
+   "label": "Inbound Webhooks"
+  },
+  {
+   "description": "HMAC shared secret. Generate here, then paste into your Medusa subscriber/plugin.",
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook Secret"
+  },
+  {
+   "description": "Configure your Medusa subscriber to POST events to this URL.",
+   "fieldname": "webhook_receiver_url",
+   "fieldtype": "Small Text",
+   "label": "Webhook Receiver URL",
+   "read_only": 1
+  },
+  {
+   "default": "X-Medusa-Signature",
+   "description": "Header the Medusa subscriber sends the HMAC signature in.",
+   "fieldname": "webhook_signature_header",
+   "fieldtype": "Data",
+   "label": "Signature Header"
+  },
+  {
+   "fieldname": "column_break_wh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "base64",
+   "description": "Encoding of the HMAC-SHA256 digest sent by the subscriber.",
+   "fieldname": "webhook_signature_encoding",
+   "fieldtype": "Select",
+   "label": "Signature Encoding",
+   "options": "base64\nhex"
+  },
+  {
+   "default": "1",
+   "description": "Uncheck only for local testing.",
+   "fieldname": "verify_signatures",
+   "fieldtype": "Check",
+   "label": "Verify Signatures"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_webhook_processing",
+   "fieldtype": "Check",
+   "label": "Enable Webhook Processing"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Medusa Connector",
+ "name": "Medusa Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

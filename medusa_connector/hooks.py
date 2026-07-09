@@ -153,23 +153,11 @@ use_json_request_body = True
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"medusa_connector.tasks.all"
-# 	],
-# 	"daily": [
-# 		"medusa_connector.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"medusa_connector.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"medusa_connector.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"medusa_connector.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"hourly_long": [
+		"medusa_connector.medusa.client.scheduled_health_check",
+	],
+}
 
 # Testing
 # -------
@@ -264,4 +252,3 @@ require_type_annotated_api_methods = True
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-
