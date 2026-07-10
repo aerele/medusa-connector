@@ -59,7 +59,7 @@ def _build_event(log) -> MedusaEvent:
 	return MedusaEvent(
 		name=log.event_name or "",
 		event_id=log.event_id or log.name,
-		data=raw.get("data") or {},
+		data=raw.get("data") or raw,
 		raw=raw,
 		log_name=log.name,
 	)

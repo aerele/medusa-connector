@@ -8,7 +8,7 @@ in Medusa) derive their URLs here, so a change to the site URL or the route is
 picked up everywhere and the child table stays consistent automatically.
 """
 
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from frappe.utils import get_url
 
@@ -21,17 +21,21 @@ def receiver_base_url() -> str:
 	return get_url(RECEIVER_METHOD)
 
 
-def signed_target_url(secret: str | None) -> str:
+def signed_target_url(secret: str | None, event: str | None = None) -> str:
 	"""URL actually registered in Medusa.
 
 	The @lambdacurry/medusa-webhooks model stores no secret/header, so authenticity
-	travels as a ``token`` query param that the receiver validates. When no secret
-	is set the bare endpoint is used (only sensible with signature verification off).
+	travels as a ``token`` query param that the receiver validates. The plugin
+	delivers only a resource id, so the subscribed event is also included in the
+	callback URL for the receiver to route the delivery correctly.
 	"""
 	base = receiver_base_url()
-	if not secret:
-		return base
-	return f"{base}?token={secret}"
+	params = {}
+	if secret:
+		params["token"] = secret
+	if event:
+		params["event"] = event
+	return f"{base}?{urlencode(params)}" if params else base
 
 
 def strip_query(url: str) -> str:

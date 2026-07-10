@@ -27,7 +27,7 @@ class MedusaEvent:
 
 	@property
 	def entity_id(self) -> str | None:
-		return self.data.get("id") or (self.raw.get("data") or {}).get("id")
+		return self.data.get("id") or self.raw.get("id") or (self.raw.get("data") or {}).get("id")
 
 
 class BaseHandler(abc.ABC):

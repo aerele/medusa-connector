@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
+from medusa_connector.medusa.order import OrderService
 from medusa_connector.webhook.handlers.base import BaseHandler, MedusaEvent
 from medusa_connector.webhook.registry import register
 
@@ -16,6 +17,9 @@ class OrderHandler(BaseHandler):
 	"""
 
 	resource = "orders"
+
+	def __init__(self, service: OrderService | None = None) -> None:
+		self.service = service or OrderService()
 
 	def process(self, event: MedusaEvent, entity: dict) -> str | None:
 		display_id = entity.get("display_id") or event.entity_id

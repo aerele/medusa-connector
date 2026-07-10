@@ -1,6 +1,6 @@
 {
  "actions": [],
- "creation": "2026-07-09 00:00:00.000000",
+ "creation": "2026-07-09 00:00:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -30,6 +30,7 @@
   "last_webhook_sync",
   "column_break_reg",
   "last_webhook_sync_message",
+  "section_break_yejw",
   "webhook_subscriptions"
  ],
  "fields": [
@@ -155,10 +156,10 @@
   },
   {
    "default": "1",
+   "description": "When on, saving these settings registers/updates the required webhooks in Medusa and removes duplicates automatically.",
    "fieldname": "auto_register_webhooks",
    "fieldtype": "Check",
-   "label": "Auto Register Webhooks",
-   "description": "When on, saving these settings registers/updates the required webhooks in Medusa and removes duplicates automatically."
+   "label": "Auto Register Webhooks"
   },
   {
    "fieldname": "section_registrations",
@@ -190,18 +191,22 @@
    "read_only": 1
   },
   {
+   "description": "Live mirror of the webhooks registered in Medusa. Managed automatically \u2014 do not edit.",
    "fieldname": "webhook_subscriptions",
    "fieldtype": "Table",
    "label": "Webhooks",
    "options": "Medusa Webhook Registration",
-   "read_only": 1,
-   "description": "Live mirror of the webhooks registered in Medusa. Managed automatically \u2014 do not edit."
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_yejw",
+   "fieldtype": "Section Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-09 00:00:00.000000",
+ "modified": "2026-07-10 14:58:49.592562",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Settings",
@@ -218,6 +223,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],

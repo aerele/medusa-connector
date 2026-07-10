@@ -23,6 +23,39 @@ SYNC_TRIGGER_FIELDS = (
 
 
 class MedusaSettings(Document):
+	# begin: auto-generated types
+	# This code is auto-generated. Do not modify anything in this block.
+
+	from typing import TYPE_CHECKING
+
+	if TYPE_CHECKING:
+		from frappe.types import DF
+
+		from medusa_connector.medusa_connector.doctype.medusa_webhook_registration.medusa_webhook_registration import (
+			MedusaWebhookRegistration,
+		)
+
+		admin_api_key: DF.Password | None
+		auto_register_webhooks: DF.Check
+		connection_mode: DF.Literal["REST", "GraphQL"]
+		connection_status: DF.Literal["Unknown", "Disconnected", "Connected", "Auth Failed", "Error"]
+		enable_webhook_processing: DF.Check
+		enabled: DF.Check
+		graphql_url: DF.Data | None
+		last_connection_message: DF.SmallText | None
+		last_connection_test: DF.Datetime | None
+		last_webhook_sync: DF.Datetime | None
+		last_webhook_sync_message: DF.SmallText | None
+		medusa_base_url: DF.Data | None
+		verify_signatures: DF.Check
+		webhook_plugin_status: DF.Literal["Unknown", "Installed", "Not Installed", "Error"]
+		webhook_receiver_url: DF.SmallText | None
+		webhook_secret: DF.Password | None
+		webhook_signature_encoding: DF.Literal["base64", "hex"]
+		webhook_signature_header: DF.Data | None
+		webhook_subscriptions: DF.Table[MedusaWebhookRegistration]
+	# end: auto-generated types
+
 	def validate(self) -> None:
 		# Surface the guest receiver URL so the admin can see/copy the ERP endpoint.
 		self.webhook_receiver_url = receiver_base_url()

@@ -131,7 +131,6 @@ class WebhookSyncService:
 
 	# -- reconciliation ------------------------------------------------
 	def _reconcile(self, client: MedusaClient, existing: list[dict]) -> list[dict]:
-		target_url = signed_target_url(self.secret)
 		ours = [w for w in existing if self._is_ours(w)]
 		desired = set(registered_events())
 		rows: list[dict] = []
@@ -139,7 +138,7 @@ class WebhookSyncService:
 		for event in registered_events():
 			matches = [w for w in ours if w.get("event_type") == event]
 			try:
-				webhook_id = self._ensure_event(client, event, matches, target_url)
+				webhook_id = self._ensure_event(client, event, matches, signed_target_url(self.secret, event))
 			except MedusaConnectorError as exc:
 				rows.append(self._row(event, STATUS_FAILED, error=str(exc)))
 				continue

@@ -34,6 +34,12 @@ def receive() -> dict:
 	raw = frappe.request.data or b""
 	headers = dict(frappe.request.headers)
 
+	print("=" * 80)
+	print("RAW BODY:", raw.decode("utf-8", errors="ignore"))
+	print("HEADERS:", headers)
+	print("QUERY PARAMS:", dict(frappe.request.args))
+	print("=" * 80)
+
 	authentic = authenticate(settings, raw, headers)
 	if settings.verify_signatures and not authentic:
 		_log(
@@ -52,8 +58,16 @@ def receive() -> dict:
 	except (ValueError, TypeError):
 		body = {}
 
-	event_id = body.get("id") or headers.get(EVENT_ID_HEADER)
-	event_name = body.get("event") or body.get("name") or body.get("event_name")
+	# The plugin's ``id`` is the affected resource id, not a unique webhook
+	# delivery id. Do not use it for deduplication: doing so would suppress every
+	# later update to the same product. Prefer an explicit delivery id/header and
+	# generate one when the plugin provides neither.
+	event_id = headers.get(EVENT_ID_HEADER) or body.get("event_id") or frappe.generate_hash(length=16)
+	# The Medusa webhooks plugin delivers ``{"id": "..."}`` only. The subscribed
+	# event is carried in the callback URL by WebhookSyncService.
+	event_name = (
+		body.get("event") or body.get("name") or body.get("event_name") or frappe.request.args.get("event")
+	)
 
 	# Idempotency: Medusa delivers at-least-once, so a repeat id is a no-op.
 	if event_id and frappe.db.exists("Medusa Webhook Log", {"event_id": event_id}):
