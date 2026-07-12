@@ -18,7 +18,9 @@
   "status",
   "last_synced_on",
   "last_sync_status",
-  "last_error"
+  "last_error",
+  "inventory_synced_on",
+  "medusa_inventory_item_id"
  ],
  "fields": [
   {
@@ -106,6 +108,18 @@
    "fieldname": "last_error",
    "fieldtype": "Small Text",
    "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "inventory_synced_on",
+   "fieldtype": "Datetime",
+   "label": "Inventory Synced On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "medusa_inventory_item_id",
+   "fieldtype": "Data",
+   "label": "Medusa Inventory Item ID",
    "read_only": 1
   }
  ],

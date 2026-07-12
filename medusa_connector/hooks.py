@@ -146,6 +146,7 @@ doc_events = {
 	"Item": {
 		"after_insert": "medusa_connector.product.export_products.upload_erpnext_item",
 		"on_update": "medusa_connector.product.export_products.upload_erpnext_item",
+		"on_trash": "medusa_connector.product.export_products.archive_erpnext_item",
 	},
 }
 
@@ -153,6 +154,10 @@ doc_events = {
 # ---------------
 
 scheduler_events = {
+	"all": [
+		# Shopify-style inventory push (gated by frequency on Medusa Settings).
+		"medusa_connector.product.inventory_export.update_inventory_on_medusa",
+	],
 	"hourly_long": [
 		"medusa_connector.medusa.client.scheduled_health_check",
 		"medusa_connector.medusa.services.webhook_sync.scheduled_webhook_sync",

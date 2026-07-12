@@ -104,13 +104,41 @@ class MedusaClient:
 			)
 			response.raise_for_status()
 		except Exception as exc:
-			status = getattr(getattr(exc, "response", None), "status_code", None)
+			resp = getattr(exc, "response", None)
+			status = getattr(resp, "status_code", None)
+			detail = self._format_error_detail(resp)
+			message = str(exc)
+			if detail:
+				message = f"{message}: {detail}"
 			if status in (401, 403):
 				raise MedusaAuthError(
 					f"Medusa rejected the credentials (HTTP {status})", status_code=status
 				) from exc
-			raise MedusaConnectionError(str(exc), status_code=status) from exc
+			raise MedusaConnectionError(message, status_code=status) from exc
 		return self._parse(response)
+
+	@staticmethod
+	def _format_error_detail(response) -> str:
+		"""Extract a short error body from a failed HTTP response for logs/sync UI."""
+		if response is None:
+			return ""
+		try:
+			body = response.json()
+		except Exception:
+			text = (getattr(response, "text", None) or "").strip()
+			return text[:1000] if text else ""
+		if not isinstance(body, dict):
+			return str(body)[:1000]
+		# Medusa validation / framework errors commonly use message / type / errors.
+		parts = []
+		for key in ("message", "type", "code"):
+			if body.get(key):
+				parts.append(f"{key}={body[key]}")
+		if body.get("errors"):
+			parts.append(frappe.as_json(body["errors"]))
+		elif not parts and body:
+			parts.append(frappe.as_json(body)[:1000])
+		return "; ".join(parts)
 
 	@staticmethod
 	def _parse(response) -> dict:
@@ -272,7 +300,11 @@ def _update_status(status: str, message: str) -> None:
 
 
 def test_connection() -> dict:
-	"""Run the mode-appropriate health probe, persist the result, and return a summary."""
+	"""Run the mode-appropriate health probe, persist the result, and return a summary.
+
+	On success, also refreshes Medusa store defaults (sales channel, currency,
+	region, location) onto Medusa Settings.
+	"""
 	try:
 		# Build a fresh client so a just-saved mode/key/url is picked up.
 		client = MedusaClient()
@@ -284,9 +316,21 @@ def test_connection() -> dict:
 		_update_status("Error", str(exc))
 		return {"status": "Error", "message": str(exc)}
 
+	defaults = {}
+	try:
+		from medusa_connector.utils.store_defaults import refresh_store_defaults
+
+		defaults = refresh_store_defaults(client, commit=True)
+	except Exception as exc:
+		frappe.log_error(
+			title="Medusa: store defaults refresh failed",
+			message=frappe.get_traceback(with_context=True),
+		)
+		defaults = {"error": str(exc)}
+
 	message = f"Connection successful ({client.mode})."
 	_update_status("Connected", message)
-	return {"status": "Connected", "message": message}
+	return {"status": "Connected", "message": message, "store_defaults": defaults}
 
 
 def scheduled_health_check() -> None:

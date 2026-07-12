@@ -16,15 +16,29 @@
   "connection_status",
   "last_connection_test",
   "last_connection_message",
+  "section_store_defaults",
+  "medusa_store_id",
+  "default_sales_channel_id",
+  "default_currency",
+  "column_break_store",
+  "default_region_id",
+  "default_location_id",
+  "last_store_defaults_sync",
   "section_products",
   "warehouse",
   "item_group",
   "default_stock_uom",
+  "price_list",
   "column_break_prod",
   "upload_erpnext_items",
   "update_medusa_item_on_update",
   "sync_new_item_as_published",
   "upload_variants_as_items",
+  "on_item_delete",
+  "section_inventory",
+  "update_erpnext_stock_levels_to_medusa",
+  "inventory_sync_frequency",
+  "last_inventory_sync",
   "section_product_status",
   "last_product_sync",
   "last_product_sync_message",
@@ -117,6 +131,63 @@
    "read_only": 1
   },
   {
+   "collapsible": 1,
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_store_defaults",
+   "fieldtype": "Section Break",
+   "label": "Medusa Store Defaults"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Fetched from GET /admin/stores.",
+   "fieldname": "medusa_store_id",
+   "fieldtype": "Data",
+   "label": "Medusa Store ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Default sales channel used when creating products.",
+   "fieldname": "default_sales_channel_id",
+   "fieldtype": "Data",
+   "label": "Default Sales Channel ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Default currency code (e.g. eur, usd) for variant prices.",
+   "fieldname": "default_currency",
+   "fieldtype": "Data",
+   "label": "Default Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_store",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "default_region_id",
+   "fieldtype": "Data",
+   "label": "Default Region ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Default stock location for inventory level updates.",
+   "fieldname": "default_location_id",
+   "fieldtype": "Data",
+   "label": "Default Location ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_store_defaults_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Store Defaults Sync",
+   "read_only": 1
+  },
+  {
    "depends_on": "eval:doc.enabled",
    "fieldname": "section_products",
    "fieldtype": "Tab Break",
@@ -124,7 +195,7 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Default warehouse for imported Items.",
+   "description": "Default warehouse for imported Items and inventory export.",
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Default Warehouse",
@@ -145,6 +216,14 @@
    "fieldtype": "Link",
    "label": "Default Stock UOM",
    "options": "UOM"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Optional Selling Price List for ERPNext → Medusa prices (else Item.standard_rate).",
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "Price List"
   },
   {
    "fieldname": "column_break_prod",
@@ -181,6 +260,44 @@
    "fieldname": "upload_variants_as_items",
    "fieldtype": "Check",
    "label": "Upload ERPNext Item Variants to Medusa"
+  },
+  {
+   "default": "Draft",
+   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
+   "description": "When an ERPNext Item is deleted, draft or delete the linked Medusa product.",
+   "fieldname": "on_item_delete",
+   "fieldtype": "Select",
+   "label": "On Item Delete",
+   "options": "Draft\nDelete"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_inventory",
+   "fieldtype": "Section Break",
+   "label": "Inventory"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Push ERPNext stock levels to Medusa inventory location levels (requires Default Location ID).",
+   "fieldname": "update_erpnext_stock_levels_to_medusa",
+   "fieldtype": "Check",
+   "label": "Update Stock Levels to Medusa"
+  },
+  {
+   "default": "15",
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "fieldname": "inventory_sync_frequency",
+   "fieldtype": "Select",
+   "label": "Inventory Sync Frequency (Minutes)",
+   "options": "5\n10\n15\n30\n60"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_inventory_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Inventory Sync",
+   "read_only": 1
   },
   {
    "depends_on": "eval:doc.enabled",

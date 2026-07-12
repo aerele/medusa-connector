@@ -6,6 +6,10 @@ import frappe
 from medusa_connector.mapper.product_mapper import ProductMapper
 from medusa_connector.medusa.product import ProductService
 from medusa_connector.sync.product_sync import ProductSync
+from medusa_connector.utils.sync_guard import (
+	should_skip_inbound_for_product,
+	try_claim_product_sync,
+)
 from medusa_connector.webhook.handlers.base import BaseHandler, MedusaEvent
 from medusa_connector.webhook.registry import register
 
@@ -39,6 +43,14 @@ class ProductHandler(BaseHandler):
 
 		if not product_id:
 			raise ValueError("Product webhook does not contain a product id")
+
+		# Echo of our own ERPNext → Medusa export: skip to break the loop.
+		if should_skip_inbound_for_product(product_id):
+			return f"{event.name}: skipped (outbound export echo for {product_id})"
+
+		# Coalesce product.updated storms with concurrent variant events.
+		if event.name == "product.updated" and not try_claim_product_sync(product_id):
+			return f"{event.name}: skipped (already syncing {product_id})"
 
 		product = self.service.get_product(product_id)
 		mapped_product = self.mapper.map(product)

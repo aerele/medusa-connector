@@ -331,13 +331,17 @@ def is_product_sync_running() -> bool:
 
 
 def _sync_one(product_id: str, *, force: bool = True, product_payload: dict | None = None) -> dict:
+	from medusa_connector.utils.sync_guard import inbound_sync
+
 	service = ProductService()
 	product = product_payload or service.get_product(product_id)
 	if not product or not product.get("id"):
 		raise frappe.ValidationError(f"Product {product_id} not found in Medusa")
 	mapped = ProductMapper().map(product)
 	sync = ProductSync()
-	return sync.sync(mapped, force=force)
+	# inbound_sync also wraps ProductSync.sync; double-wrap is harmless.
+	with inbound_sync():
+		return sync.sync(mapped, force=force)
 
 
 def _primary_sku(product: dict) -> str:

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import frappe
 from erpnext.controllers.item_variant import create_variant, get_variant
-from frappe.utils import cstr, now_datetime
+from frappe.utils import cstr, flt, now_datetime
 
 from medusa_connector.medusa_connector.doctype.medusa_item_mapping.medusa_item_mapping import (
 	get_erpnext_item,
@@ -34,23 +34,29 @@ class ProductSync:
 		Returns ``{item_code, action, variant_codes}`` where action is
 		``created`` / ``updated`` / ``skipped``.
 		"""
-		product_id = mapped_product["medusa_product_id"]
-		existing = get_erpnext_item(product_id, has_variants=mapped_product.get("has_variants") or 0)
+		from medusa_connector.utils.sync_guard import inbound_sync, mark_product_imported
 
-		self._sync_attributes(mapped_product.get("attributes") or [])
+		with inbound_sync():
+			product_id = mapped_product["medusa_product_id"]
+			existing = get_erpnext_item(product_id, has_variants=mapped_product.get("has_variants") or 0)
 
-		if mapped_product.get("has_variants"):
-			template_code, action = self._sync_template(mapped_product, existing)
-			variant_codes = []
-			for variant in mapped_product.get("variants") or []:
-				code = self._sync_variant(template_code, product_id, variant, force=force)
-				if code:
-					variant_codes.append(code)
-			return {"item_code": template_code, "action": action, "variant_codes": variant_codes}
+			self._sync_attributes(mapped_product.get("attributes") or [])
 
-		# Simple (non-template) product.
-		item_code, action = self._sync_simple_item(mapped_product, existing)
-		return {"item_code": item_code, "action": action, "variant_codes": []}
+			if mapped_product.get("has_variants"):
+				template_code, action = self._sync_template(mapped_product, existing)
+				variant_codes = []
+				for variant in mapped_product.get("variants") or []:
+					code = self._sync_variant(template_code, product_id, variant, force=force)
+					if code:
+						variant_codes.append(code)
+				# Suppress ERPNext → Medusa export echoes for template + variants.
+				mark_product_imported(product_id, [template_code, *variant_codes])
+				return {"item_code": template_code, "action": action, "variant_codes": variant_codes}
+
+			# Simple (non-template) product.
+			item_code, action = self._sync_simple_item(mapped_product, existing)
+			mark_product_imported(product_id, [item_code])
+			return {"item_code": item_code, "action": action, "variant_codes": []}
 
 	def disable_product(self, product_id: str) -> str | None:
 		"""Disable ERPNext items linked to a deleted Medusa product."""
@@ -61,8 +67,7 @@ class ProductSync:
 		for item in filter(None, [template, simple]):
 			if not item.disabled:
 				item.disabled = 1
-				item.flags.from_medusa = True
-				item.save(ignore_permissions=True)
+				self._save_item(item)
 			disabled.append(item.name)
 			mark_orphaned(product_id)
 			# Disable child variants via mapping.
@@ -76,8 +81,7 @@ class ProductSync:
 					v = frappe.get_doc("Item", row.erpnext_item_code)
 					if not v.disabled:
 						v.disabled = 1
-						v.flags.from_medusa = True
-						v.save(ignore_permissions=True)
+						self._save_item(v)
 				mark_orphaned(product_id, row.medusa_variant_id)
 				disabled.append(row.erpnext_item_code)
 
@@ -93,8 +97,7 @@ class ProductSync:
 					item = frappe.get_doc("Item", row.erpnext_item_code)
 					if not item.disabled:
 						item.disabled = 1
-						item.flags.from_medusa = True
-						item.save(ignore_permissions=True)
+						self._save_item(item)
 					disabled.append(item.name)
 				mark_orphaned(product_id, row.medusa_variant_id)
 
@@ -186,11 +189,7 @@ class ProductSync:
 			self.created += 1
 
 		self._apply_item_fields(item, mapped, has_variants=1)
-		item.flags.from_medusa = True
-		if item.is_new():
-			item.insert(ignore_permissions=True, ignore_mandatory=True)
-		else:
-			item.save(ignore_permissions=True)
+		self._save_item(item)
 
 		upsert_mapping(
 			erpnext_item_code=item.name,
@@ -205,6 +204,9 @@ class ProductSync:
 		# SKU match for simple products without a mapping yet.
 		if not existing and mapped.get("sku") and frappe.db.exists("Item", mapped["sku"]):
 			existing = frappe.get_doc("Item", mapped["sku"])
+		# external_id / metadata.erpnext_item_code may already point at an Item.
+		if not existing and mapped.get("item_code") and frappe.db.exists("Item", mapped["item_code"]):
+			existing = frappe.get_doc("Item", mapped["item_code"])
 
 		if existing:
 			item = existing
@@ -230,15 +232,11 @@ class ProductSync:
 				self.created += 1
 
 		self._apply_item_fields(item, mapped, has_variants=0)
-		item.flags.from_medusa = True
-		if item.is_new():
-			item.insert(ignore_permissions=True, ignore_mandatory=True)
-		else:
-			item.save(ignore_permissions=True)
+		self._save_item(item)
 
-		# Simple products often still have a single Medusa variant id — store it when present.
-		variant_id = None
-		upsert_mapping(
+		# Simple products still have a single Medusa variant — store id for inventory/price.
+		variant_id = mapped.get("medusa_variant_id")
+		mapping_name = upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,
 			variant_id=variant_id,
@@ -246,6 +244,14 @@ class ProductSync:
 			has_variants=0,
 			status="Disabled" if item.disabled else "Active",
 		)
+		if mapped.get("medusa_inventory_item_id"):
+			frappe.db.set_value(
+				"Medusa Item Mapping",
+				mapping_name,
+				"medusa_inventory_item_id",
+				mapped["medusa_inventory_item_id"],
+				update_modified=False,
+			)
 		return item.name, action
 
 	def _sync_variant(self, template_code: str, product_id: str, variant: dict, *, force: bool) -> str | None:
@@ -258,7 +264,7 @@ class ProductSync:
 		mapped_item = get_erpnext_item(product_id, variant_id=variant_id, sku=variant.get("sku"))
 		if mapped_item:
 			self._update_variant_item(mapped_item, variant)
-			upsert_mapping(
+			mapping_name = upsert_mapping(
 				erpnext_item_code=mapped_item.name,
 				medusa_product_id=product_id,
 				variant_id=variant_id,
@@ -267,6 +273,14 @@ class ProductSync:
 				has_variants=0,
 				status="Disabled" if mapped_item.disabled else "Active",
 			)
+			if variant.get("medusa_inventory_item_id"):
+				frappe.db.set_value(
+					"Medusa Item Mapping",
+					mapping_name,
+					"medusa_inventory_item_id",
+					variant["medusa_inventory_item_id"],
+					update_modified=False,
+				)
 			self.updated += 1
 			return mapped_item.name
 
@@ -274,7 +288,7 @@ class ProductSync:
 		if existing_code:
 			item = frappe.get_doc("Item", existing_code)
 			self._update_variant_item(item, variant)
-			upsert_mapping(
+			mapping_name = upsert_mapping(
 				erpnext_item_code=item.name,
 				medusa_product_id=product_id,
 				variant_id=variant_id,
@@ -283,6 +297,14 @@ class ProductSync:
 				has_variants=0,
 				status="Disabled" if item.disabled else "Active",
 			)
+			if variant.get("medusa_inventory_item_id"):
+				frappe.db.set_value(
+					"Medusa Item Mapping",
+					mapping_name,
+					"medusa_inventory_item_id",
+					variant["medusa_inventory_item_id"],
+					update_modified=False,
+				)
 			self.updated += 1
 			return item.name
 
@@ -296,12 +318,15 @@ class ProductSync:
 			variant_doc.item_name = variant["item_name"]
 		if variant.get("image"):
 			variant_doc.image = variant["image"]
+		if variant.get("standard_rate") is not None:
+			variant_doc.standard_rate = flt(variant.get("standard_rate"))
+		if variant.get("weight") is not None:
+			variant_doc.weight_per_unit = flt(variant.get("weight"))
 		if variant.get("barcode"):
 			variant_doc.append("barcodes", {"barcode": variant["barcode"]})
-		variant_doc.flags.from_medusa = True
-		variant_doc.insert(ignore_permissions=True, ignore_mandatory=True)
+		self._save_item(variant_doc)
 
-		upsert_mapping(
+		mapping_name = upsert_mapping(
 			erpnext_item_code=variant_doc.name,
 			medusa_product_id=product_id,
 			variant_id=variant_id,
@@ -310,16 +335,44 @@ class ProductSync:
 			has_variants=0,
 			status="Active",
 		)
+		if variant.get("medusa_inventory_item_id"):
+			frappe.db.set_value(
+				"Medusa Item Mapping",
+				mapping_name,
+				"medusa_inventory_item_id",
+				variant["medusa_inventory_item_id"],
+				update_modified=False,
+			)
 		self.created += 1
 		return variant_doc.name
 
 	def _update_variant_item(self, item, variant: dict) -> None:
 		changed = False
-		if variant.get("item_name") and item.item_name != variant["item_name"]:
-			item.item_name = variant["item_name"]
-			changed = True
+		new_name = (variant.get("item_name") or "")[:140]
+		# Never grow a polluted name (loop residue); only replace if cleaner/equal length.
+		if new_name and item.item_name != new_name:
+			if len(new_name) <= len(item.item_name or "") or not (item.item_name or "").startswith(
+				new_name[:20]
+			):
+				# Prefer shorter stable names; skip if current already starts with product title spam
+				if " - " not in (item.item_name or "") or new_name.count(" - ") <= (
+					item.item_name or ""
+				).count(" - "):
+					item.item_name = new_name
+					changed = True
+			elif len(new_name) < len(item.item_name or ""):
+				item.item_name = new_name
+				changed = True
 		if variant.get("image") and item.image != variant["image"]:
 			item.image = variant["image"]
+			changed = True
+		if variant.get("standard_rate") is not None and flt(item.standard_rate) != flt(
+			variant.get("standard_rate")
+		):
+			item.standard_rate = flt(variant.get("standard_rate"))
+			changed = True
+		if variant.get("weight") is not None and flt(item.weight_per_unit) != flt(variant.get("weight")):
+			item.weight_per_unit = flt(variant.get("weight"))
 			changed = True
 		if variant.get("barcode"):
 			existing_barcodes = {row.barcode for row in item.barcodes or []}
@@ -327,8 +380,32 @@ class ProductSync:
 				item.append("barcodes", {"barcode": variant["barcode"]})
 				changed = True
 		if changed:
-			item.flags.from_medusa = True
-			item.save(ignore_permissions=True)
+			self._save_item(item)
+
+	@staticmethod
+	def _save_item(item) -> None:
+		"""Persist Item while avoiding export hooks and concurrent-timestamp races.
+
+		Critical: ERPNext ``Item.on_update`` calls ``update_variants()`` which
+		re-saves every variant **without** our flags. That re-export is the main
+		webhook feedback loop. Always set ``dont_update_variants`` for inbound.
+		"""
+		item.flags.from_medusa = True
+		item.flags.from_integration = True
+		item.flags.ignore_version = True
+		# Prevent Item.on_update → update_variants() cascade (saves variants bare).
+		item.flags.dont_update_variants = True
+		if item.is_new():
+			item.insert(ignore_permissions=True, ignore_mandatory=True)
+			return
+
+		# Concurrent webhook workers can race on the same Item; adopt DB modified
+		# so check_if_latest does not raise TimestampMismatchError.
+		db_modified = frappe.db.get_value(item.doctype, item.name, "modified")
+		if db_modified:
+			item._original_modified = db_modified
+			item.modified = db_modified
+		item.save(ignore_permissions=True)
 
 	def _apply_item_fields(self, item, mapped: dict, *, has_variants: int) -> None:
 		item.item_name = mapped.get("item_name") or item.item_name
@@ -338,6 +415,10 @@ class ProductSync:
 		item.image = mapped.get("image") or item.image
 		item.disabled = int(mapped.get("disabled") or 0)
 		item.has_variants = int(has_variants)
+		if not has_variants and mapped.get("standard_rate") is not None:
+			item.standard_rate = flt(mapped.get("standard_rate"))
+		if mapped.get("weight") is not None:
+			item.weight_per_unit = flt(mapped.get("weight"))
 		if has_variants:
 			item.attributes = []
 			for attribute in mapped.get("attributes") or []:
