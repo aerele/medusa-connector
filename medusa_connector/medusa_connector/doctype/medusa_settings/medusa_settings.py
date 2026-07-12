@@ -18,7 +18,6 @@ SYNC_TRIGGER_FIELDS = (
 	"medusa_base_url",
 	"admin_api_key",
 	"webhook_secret",
-	"auto_register_webhooks",
 )
 
 
@@ -36,27 +35,53 @@ class MedusaSettings(Document):
 		)
 
 		admin_api_key: DF.Password | None
-		auto_register_webhooks: DF.Check
 		connection_mode: DF.Literal["REST", "GraphQL"]
 		connection_status: DF.Literal["Unknown", "Disconnected", "Connected", "Auth Failed", "Error"]
-		enable_webhook_processing: DF.Check
+		default_stock_uom: DF.Link | None
 		enabled: DF.Check
 		graphql_url: DF.Data | None
+		item_group: DF.Link | None
 		last_connection_message: DF.SmallText | None
 		last_connection_test: DF.Datetime | None
+		last_product_sync: DF.Datetime | None
+		last_product_sync_message: DF.SmallText | None
 		last_webhook_sync: DF.Datetime | None
 		last_webhook_sync_message: DF.SmallText | None
 		medusa_base_url: DF.Data | None
+		sync_new_item_as_published: DF.Check
+		update_medusa_item_on_update: DF.Check
+		upload_erpnext_items: DF.Check
+		upload_variants_as_items: DF.Check
 		verify_signatures: DF.Check
+		warehouse: DF.Link | None
 		webhook_plugin_status: DF.Literal["Unknown", "Installed", "Not Installed", "Error"]
 		webhook_receiver_url: DF.SmallText | None
 		webhook_secret: DF.Password | None
-		webhook_signature_encoding: DF.Literal["base64", "hex"]
-		webhook_signature_header: DF.Data | None
 		webhook_subscriptions: DF.Table[MedusaWebhookRegistration]
 	# end: auto-generated types
 
 	def validate(self) -> None:
+		# Clean and normalize URLs
+		if self.medusa_base_url:
+			original = self.medusa_base_url
+			cleaned = self._normalize_url(original)
+			if cleaned != original:
+				self.medusa_base_url = cleaned
+				frappe.msgprint(
+					frappe._("Normalized Medusa Base URL to '{0}'.").format(cleaned),
+					alert=True,
+				)
+
+		if self.graphql_url:
+			original = self.graphql_url
+			cleaned = self._normalize_url(original, is_graphql=True)
+			if cleaned != original:
+				self.graphql_url = cleaned
+				frappe.msgprint(
+					frappe._("Normalized GraphQL URL to '{0}'.").format(cleaned),
+					alert=True,
+				)
+
 		# Surface the guest receiver URL so the admin can see/copy the ERP endpoint.
 		self.webhook_receiver_url = receiver_base_url()
 
@@ -71,6 +96,33 @@ class MedusaSettings(Document):
 			self.connection_status = "Disconnected"
 			self.last_connection_test = now_datetime()
 			self.last_connection_message = frappe._("Connector disabled.")
+
+	def _normalize_url(self, url_str: str, is_graphql: bool = False) -> str:
+		if not url_str:
+			return url_str
+
+		url_str = url_str.strip()
+
+		# Determine scheme
+		has_scheme = url_str.startswith(("http://", "https://"))
+		scheme = "https"
+		if url_str.startswith("http://"):
+			scheme = "http"
+
+		# Remove scheme for processing
+		temp = url_str.split("://", 1)[1] if has_scheme else url_str
+
+		# Split host and path
+		host, _, _ = temp.partition("/")
+
+		# Default localhost to http
+		if not has_scheme and host.startswith(("localhost", "127.0.0.1")):
+			scheme = "http"
+
+		if is_graphql:
+			return f"{scheme}://{host}/graphql"
+
+		return f"{scheme}://{host}"
 
 	def on_update(self) -> None:
 		"""After a connection-relevant change, reconcile the Medusa webhooks."""
@@ -102,12 +154,16 @@ class MedusaSettings(Document):
 			# slow/unreachable Medusa must not stall the form for the full 30s.
 			client.timeout = 10
 			client.health_check()
-		except (MedusaAuthError, MedusaConnectionError) as exc:
+		except MedusaAuthError:
 			frappe.throw(
-				frappe._("Cannot enable Medusa Connector — connection test failed: {0}").format(str(exc)),
+				frappe._("Unable to authenticate with Medusa. Please verify the Admin API Key."),
+				title=frappe._("Authentication Failed"),
+			)
+		except MedusaConnectionError as exc:
+			frappe.throw(
+				frappe._(str(exc)),
 				title=frappe._("Connection Failed"),
 			)
-
 		# Record the successful probe alongside the save.
 		self.connection_status = "Connected"
 		self.last_connection_test = now_datetime()

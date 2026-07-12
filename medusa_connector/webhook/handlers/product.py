@@ -1,3 +1,6 @@
+# Copyright (c) 2026, Aerele and contributors
+# For license information, please see license.txt
+
 import frappe
 
 from medusa_connector.mapper.product_mapper import ProductMapper
@@ -28,17 +31,16 @@ class ProductHandler(BaseHandler):
 	def process(self, event: MedusaEvent, entity: dict) -> str | None:
 		product_id = event.entity_id
 
-		# Deleted products no longer exist in Medusa
 		if event.name == "product.deleted":
-			if product_id and frappe.db.exists("Item", product_id):
-				item = frappe.get_doc("Item", product_id)
-				item.disabled = 1
-				item.save()
-			return f"Deleted {product_id}"
+			if not product_id:
+				return "Deleted product without id"
+			item_code = self.sync_service.disable_product(product_id)
+			return f"Deleted {product_id} → disabled {item_code or 'no mapping'}"
 
 		if not product_id:
 			raise ValueError("Product webhook does not contain a product id")
+
 		product = self.service.get_product(product_id)
 		mapped_product = self.mapper.map(product)
-		item_name = self.sync_service.sync(mapped_product)
-		return f"{event.name}: {item_name}"
+		result = self.sync_service.sync(mapped_product, force=True)
+		return f"{event.name}: {result['action']} {result['item_code']}"

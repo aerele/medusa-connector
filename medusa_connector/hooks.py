@@ -140,15 +140,14 @@ use_json_request_body = True
 
 # Document Events
 # ---------------
-# Hook on document methods and events
+# ERPNext → Medusa product upload (gated by Medusa Settings flags).
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Item": {
+		"after_insert": "medusa_connector.product.export_products.upload_erpnext_item",
+		"on_update": "medusa_connector.product.export_products.upload_erpnext_item",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
@@ -165,6 +164,14 @@ scheduler_events = {
 		],
 	},
 }
+
+# Desk page client scripts are loaded automatically from page/ folders.
+# Keep log retention configurable.
+default_log_clearing_doctypes = {
+	"Medusa Webhook Log": 90,
+	"Medusa Sync Log": 90,
+}
+
 
 # Testing
 # -------
@@ -250,10 +257,6 @@ export_python_type_annotations = True
 
 # Require all whitelisted methods to have type annotations
 require_type_annotated_api_methods = True
-
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
 
 # Translation
 # ------------

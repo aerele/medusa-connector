@@ -56,11 +56,78 @@ module.exports = defineConfig({
       resolve: "@lambdacurry/medusa-webhooks",
       options: {
         subscriptions: [
-          "order.placed", "order.updated", "order.canceled", "order.completed",
-          "payment.captured", "payment.refunded",
-          "order.fulfillment_created", "fulfillment.canceled",
+          // Product
+          "product.created",
+          "product.updated",
+          "product.deleted",
+
+          // Product Variant
+          "product-variant.created",
+          "product-variant.updated",
+          "product-variant.deleted",
+
+          // Product Category
+          "product-category.created",
+          "product-category.updated",
+          "product-category.deleted",
+
+          // Product Collection
+          "product-collection.created",
+          "product-collection.updated",
+          "product-collection.deleted",
+
+          // Customer
+          "customer.created",
+          "customer.updated",
+          "customer.deleted",
+
+          // Order
+          "order.placed",
+          "order.updated",
+          "order.canceled",
+          "order.completed",
+
+          // Payment
+          "payment.captured",
+          "payment.refunded",
+
+          // Fulfillment
+          "order.fulfillment_created",
           "order.shipment_created",
-          "order.return_requested", "order.return_received",
+          "fulfillment.canceled",
+
+          // Returns
+          "order.return_requested",
+          "order.return_received",
+
+          // Inventory
+          "inventory-item.created",
+          "inventory-item.updated",
+          "inventory-item.deleted",
+          "inventory-level.updated",
+
+          // Price
+          "price-list.created",
+          "price-list.updated",
+          "price-list.deleted",
+          "price-set.created",
+          "price-set.updated",
+          "price-set.deleted",
+
+          // Region
+          "region.created",
+          "region.updated",
+          "region.deleted",
+
+          // Sales Channel
+          "sales-channel.created",
+          "sales-channel.updated",
+          "sales-channel.deleted",
+
+          // Stock Location
+          "stock-location.created",
+          "stock-location.updated",
+          "stock-location.deleted",
         ],
       },
     },
@@ -79,11 +146,78 @@ import { fullWebhooksSubscriptionsWorkflow } from "@lambdacurry/medusa-webhooks/
 
 export const config: SubscriberConfig = {
   event: [
-    "order.placed", "order.updated", "order.canceled", "order.completed",
-    "payment.captured", "payment.refunded",
-    "order.fulfillment_created", "fulfillment.canceled",
+    // Product
+    "product.created",
+    "product.updated",
+    "product.deleted",
+
+    // Product Variant
+    "product-variant.created",
+    "product-variant.updated",
+    "product-variant.deleted",
+
+    // Product Category
+    "product-category.created",
+    "product-category.updated",
+    "product-category.deleted",
+
+    // Product Collection
+    "product-collection.created",
+    "product-collection.updated",
+    "product-collection.deleted",
+
+    // Customer
+    "customer.created",
+    "customer.updated",
+    "customer.deleted",
+
+    // Order
+    "order.placed",
+    "order.updated",
+    "order.canceled",
+    "order.completed",
+
+    // Payment
+    "payment.captured",
+    "payment.refunded",
+
+    // Fulfillment
+    "order.fulfillment_created",
     "order.shipment_created",
-    "order.return_requested", "order.return_received",
+    "fulfillment.canceled",
+
+    // Returns
+    "order.return_requested",
+    "order.return_received",
+
+    // Inventory
+    "inventory-item.created",
+    "inventory-item.updated",
+    "inventory-item.deleted",
+    "inventory-level.updated",
+
+    // Price
+    "price-list.created",
+    "price-list.updated",
+    "price-list.deleted",
+    "price-set.created",
+    "price-set.updated",
+    "price-set.deleted",
+
+    // Region
+    "region.created",
+    "region.updated",
+    "region.deleted",
+
+    // Sales Channel
+    "sales-channel.created",
+    "sales-channel.updated",
+    "sales-channel.deleted",
+
+    // Stock Location
+    "stock-location.created",
+    "stock-location.updated",
+    "stock-location.deleted",
   ],
   context: { subscriberId: "erpnext-webhook-forwarder" },
 }
@@ -97,9 +231,7 @@ export default async function forwardToErpnext({
 }
 ```
 
-The `subscriptions` option, this subscriber's `event` list, and the connector's
-handlers must all cover the same events. Use the exact event names your Medusa
-version emits.
+The `subscriptions` option, this subscriber's `event` list, and the ERPNext connector's registered event handlers should remain in sync. When support for a new Medusa resource is added, update all three together and re-run **Sync Webhooks**.
 
 ## Step 4 — Migrate and restart Medusa
 
@@ -114,7 +246,7 @@ npm run dev      # or your production start command
 
 Back in **ERPNext → Medusa Settings**:
 
-1. Make sure **Enabled** and **Auto Register Webhooks** are on.
+1. Make sure the connector is **Enabled** and the connection is verified.
 2. Set/generate a **Webhook Secret** (used to authenticate incoming calls).
 3. Click **Sync Webhooks**.
 
@@ -138,14 +270,22 @@ plugin's admin API.
 ---
 
 ## Events registered
-
-| Category | Medusa events |
-|---|---|
-| Order | `order.placed`, `order.updated`, `order.canceled`, `order.completed` |
-| Payment | `payment.captured`, `payment.refunded` |
-| Fulfillment | `order.fulfillment_created`, `fulfillment.canceled` |
-| Shipment | `order.shipment_created` |
-| Return | `order.return_requested`, `order.return_received` |
+| Category           | Medusa events                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Product            | `product.created`, `product.updated`, `product.deleted`                                                                         |
+| Product Variant    | `product-variant.created`, `product-variant.updated`, `product-variant.deleted`                                                 |
+| Product Category   | `product-category.created`, `product-category.updated`, `product-category.deleted`                                              |
+| Product Collection | `product-collection.created`, `product-collection.updated`, `product-collection.deleted`                                        |
+| Customer           | `customer.created`, `customer.updated`, `customer.deleted`                                                                      |
+| Order              | `order.placed`, `order.updated`, `order.canceled`, `order.completed`                                                            |
+| Payment            | `payment.captured`, `payment.refunded`                                                                                          |
+| Fulfillment        | `order.fulfillment_created`, `order.shipment_created`, `fulfillment.canceled`                                                   |
+| Return             | `order.return_requested`, `order.return_received`                                                                               |
+| Inventory          | `inventory-item.created`, `inventory-item.updated`, `inventory-item.deleted`, `inventory-level.updated`                         |
+| Price              | `price-list.created`, `price-list.updated`, `price-list.deleted`, `price-set.created`, `price-set.updated`, `price-set.deleted` |
+| Region             | `region.created`, `region.updated`, `region.deleted`                                                                            |
+| Sales Channel      | `sales-channel.created`, `sales-channel.updated`, `sales-channel.deleted`                                                       |
+| Stock Location     | `stock-location.created`, `stock-location.updated`, `stock-location.deleted`                                                    |
 
 Adding a new event later is a one-file change in the connector (a handler class);
 re-run **Sync Webhooks** and it registers automatically.

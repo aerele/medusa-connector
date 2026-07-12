@@ -52,7 +52,7 @@ class MedusaClient:
 		else:
 			if not self.settings.medusa_base_url:
 				raise MedusaConnectionError(
-					"Medusa Base URL is not configured. Set it, or switch Connection Mode to GraphQL."
+					"Please enter the Medusa Base URL before enabling the Medusa Connector."
 				)
 			# Normalise: drop a trailing slash so path joins are predictable.
 			self.base_url = self.settings.medusa_base_url.rstrip("/")
@@ -177,6 +177,20 @@ class MedusaClient:
 				return False
 			raise
 
+	@staticmethod
+	def _unwrap_subscription(resp: dict | None) -> dict:
+		"""Normalise create/update responses to a single subscription dict.
+
+		The plugin returns ``{"subscription": {...}}``. MedusaService helpers
+		sometimes serialise a one-item list — accept both shapes.
+		"""
+		if not resp or not isinstance(resp, dict):
+			return {}
+		data = resp.get("webhook") or resp.get("subscription") or resp
+		if isinstance(data, list):
+			return data[0] if data and isinstance(data[0], dict) else {}
+		return data if isinstance(data, dict) else {}
+
 	def list_webhooks(self) -> list[dict]:
 		"""Return every webhook subscription registered in Medusa (all pages)."""
 		self._require_rest()
@@ -187,6 +201,8 @@ class MedusaClient:
 			if resp.get("statusCode") == 404 or resp is None:
 				raise WebhookPluginNotInstalled("Medusa webhooks plugin is not installed")
 			page = resp.get("subscriptions") or resp.get("webhooks") or []
+			if not isinstance(page, list):
+				page = []
 			subscriptions.extend(page)
 			count = resp.get("count")
 			offset += limit
@@ -202,7 +218,22 @@ class MedusaClient:
 			WEBHOOKS_PATH,
 			json={"event_type": event_type, "target_url": target_url, "active": active},
 		)
-		return resp.get("webhook") or resp.get("subscription") or resp
+		return self._unwrap_subscription(resp)
+
+	def update_webhook(self, webhook_id: str, event_type: str, target_url: str, active: bool = True) -> dict:
+		"""Update an existing webhook subscription (event, URL, active flag)."""
+		self._require_rest()
+		resp = self.execute_rest(
+			"PUT",
+			f"{WEBHOOKS_PATH}/{webhook_id}",
+			json={
+				"id": webhook_id,
+				"event_type": event_type,
+				"target_url": target_url,
+				"active": active,
+			},
+		)
+		return self._unwrap_subscription(resp)
 
 	def delete_webhook(self, webhook_id: str) -> None:
 		"""Delete a webhook subscription by its Medusa id."""

@@ -17,8 +17,11 @@
   "payload",
   "section_break_result",
   "error",
+  "processing_notes",
   "retry_count",
-  "processed_at"
+  "processed_at",
+  "section_retry_history",
+  "retry_history"
  ],
  "fields": [
   {
@@ -46,6 +49,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Status",
    "options": "Received\nVerified\nRejected\nQueued\nProcessed\nFailed",
    "read_only": 1
@@ -90,13 +94,20 @@
   {
    "fieldname": "error",
    "fieldtype": "Small Text",
-   "label": "Error",
+   "label": "Error / Outcome",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_notes",
+   "fieldtype": "Small Text",
+   "label": "Processing Notes",
    "read_only": 1
   },
   {
    "default": "0",
    "fieldname": "retry_count",
    "fieldtype": "Int",
+   "in_list_view": 1,
    "label": "Retry Count",
    "read_only": 1
   },
@@ -105,11 +116,25 @@
    "fieldtype": "Datetime",
    "label": "Processed At",
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_retry_history",
+   "fieldtype": "Section Break",
+   "label": "Retry History"
+  },
+  {
+   "description": "JSON array of previous retry attempts with timestamps and outcomes.",
+   "fieldname": "retry_history",
+   "fieldtype": "Code",
+   "label": "Retry History",
+   "options": "JSON",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-09 00:00:00.000000",
+ "modified": "2026-07-12 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Webhook Log",

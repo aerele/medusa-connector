@@ -27,18 +27,12 @@ def receive() -> dict:
 	"""
 	settings = frappe.get_cached_doc("Medusa Settings")
 
-	if not settings.enabled or not settings.enable_webhook_processing:
+	if not settings.enabled:
 		frappe.local.response["http_status_code"] = 503
 		return {"status": "disabled"}
 
 	raw = frappe.request.data or b""
 	headers = dict(frappe.request.headers)
-
-	print("=" * 80)
-	print("RAW BODY:", raw.decode("utf-8", errors="ignore"))
-	print("HEADERS:", headers)
-	print("QUERY PARAMS:", dict(frappe.request.args))
-	print("=" * 80)
 
 	authentic = authenticate(settings, raw, headers)
 	if settings.verify_signatures and not authentic:
@@ -110,9 +104,9 @@ def authenticate(settings, raw: bytes, headers: dict) -> bool:
 	if not secret:
 		return False
 
-	sent = (headers.get(settings.webhook_signature_header) or "").strip()
+	sent = (headers.get("X-Medusa-Signature") or headers.get("x-medusa-signature") or "").strip()
 	if sent:
-		return _verify_hmac(secret, raw, sent, settings.webhook_signature_encoding)
+		return _verify_hmac(secret, raw, sent)
 
 	token = frappe.request.args.get("token") if frappe.request else None
 	if token:
@@ -121,12 +115,13 @@ def authenticate(settings, raw: bytes, headers: dict) -> bool:
 	return False
 
 
-def _verify_hmac(secret: str, raw: bytes, sent: str, encoding: str) -> bool:
+def _verify_hmac(secret: str, raw: bytes, sent: str) -> bool:
 	digest = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).digest()
-	expected = digest.hex() if encoding == "hex" else base64.b64encode(digest).decode()
+	expected_hex = digest.hex()
+	expected_base64 = base64.b64encode(digest).decode()
 	if sent.startswith("sha256="):
 		sent = sent[len("sha256=") :]
-	return hmac.compare_digest(sent, expected)
+	return hmac.compare_digest(sent, expected_hex) or hmac.compare_digest(sent, expected_base64)
 
 
 def _log(
