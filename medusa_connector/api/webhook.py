@@ -8,7 +8,6 @@ dedupe it, persist a Medusa Webhook Log row, and enqueue background processing.
 No business logic runs here — that lives in the dispatcher and handlers.
 """
 
-import base64
 import hashlib
 import hmac
 import json
@@ -16,6 +15,7 @@ import json
 import frappe
 
 EVENT_ID_HEADER = "X-Medusa-Event-Id"
+DEFAULT_SIGNATURE_HEADER = "X-Medusa-Signature"
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -23,7 +23,8 @@ def receive() -> dict:
 	"""Receive, authenticate, log and enqueue a Medusa webhook.
 
 	URL: ``/api/method/medusa_connector.api.webhook.receive`` (optionally with a
-	``?token=`` query param used for authenticity when the sender cannot sign).
+	``?token=`` query param — required for the Medusa webhooks plugin, which cannot
+	HMAC-sign deliveries).
 	"""
 	settings = frappe.get_cached_doc("Medusa Settings")
 
@@ -37,7 +38,6 @@ def receive() -> dict:
 	authentic = authenticate(settings, raw, headers)
 	if settings.verify_signatures and not authentic:
 		_log(
-			settings,
 			raw,
 			headers,
 			status="Rejected",
@@ -68,7 +68,6 @@ def receive() -> dict:
 		return {"status": "duplicate", "event_id": event_id}
 
 	log = _log(
-		settings,
 		raw,
 		headers,
 		status="Queued",
@@ -88,26 +87,17 @@ def receive() -> dict:
 
 
 def authenticate(settings, raw: bytes, headers: dict) -> bool:
-	"""Return True if the request proves it came from the configured Medusa.
-
-	Two mechanisms, in order of strength:
-
-	1. **HMAC signature** header — used when the sender can sign (a custom
-	   subscriber). The digest is ``hmac_sha256(secret, raw_body)``.
-	2. **URL token** — used by the webhooks plugin, which cannot sign. The secret
-	   is embedded as ``?token=`` in the registered endpoint and compared here.
-
-	Both use constant-time comparison. With no secret configured, authentication
-	fails closed (so ``verify_signatures`` must be off for unauthenticated setups).
-	"""
+	"""Return True if the request proves it came from the configured Medusa."""
 	secret = settings.get_password("webhook_secret", raise_exception=False)
 	if not secret:
 		return False
 
-	sent = (headers.get("X-Medusa-Signature") or headers.get("x-medusa-signature") or "").strip()
+	# Prefer HMAC when a signature header is present.
+	sent = _get_header(headers, _signature_header_name(settings))
 	if sent:
 		return _verify_hmac(secret, raw, sent)
 
+	# Plugin compatibility: target_url can only carry a query token, not a signature.
 	token = frappe.request.args.get("token") if frappe.request else None
 	if token:
 		return hmac.compare_digest(token, secret)
@@ -115,17 +105,38 @@ def authenticate(settings, raw: bytes, headers: dict) -> bool:
 	return False
 
 
+def _signature_header_name(settings) -> str:
+	"""Header name for HMAC verification; configurable with a sensible default."""
+	name = (settings.get("webhook_signature_header") or "").strip()
+	return name or DEFAULT_SIGNATURE_HEADER
+
+
+def _get_header(headers: dict, name: str) -> str:
+	"""Return a request header value (case-insensitive), or empty string."""
+	if not name:
+		return ""
+
+	value = headers.get(name)
+	if value:
+		return str(value).strip()
+
+	lower = name.lower()
+	for key, value in headers.items():
+		if key.lower() == lower and value:
+			return str(value).strip()
+
+	return ""
+
+
 def _verify_hmac(secret: str, raw: bytes, sent: str) -> bool:
-	digest = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).digest()
-	expected_hex = digest.hex()
-	expected_base64 = base64.b64encode(digest).decode()
+	"""Verify HMAC-SHA256 of the raw body; expected encoding is hexadecimal only."""
+	expected_hex = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
 	if sent.startswith("sha256="):
 		sent = sent[len("sha256=") :]
-	return hmac.compare_digest(sent, expected_hex) or hmac.compare_digest(sent, expected_base64)
+	return hmac.compare_digest(sent, expected_hex)
 
 
 def _log(
-	settings,
 	raw: bytes,
 	headers: dict,
 	status: str,

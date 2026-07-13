@@ -30,6 +30,7 @@
    "in_standard_filter": 1,
    "label": "ERPNext Item",
    "options": "Item",
+   "read_only": 1,
    "reqd": 1,
    "search_index": 1
   },
@@ -43,6 +44,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Medusa Product ID",
+   "read_only": 1,
    "reqd": 1,
    "search_index": 1
   },
@@ -52,6 +54,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Medusa Variant ID",
+   "read_only": 1,
    "search_index": 1
   },
   {
@@ -63,19 +66,22 @@
    "fieldname": "sku",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "SKU"
+   "label": "SKU",
+   "read_only": 1
   },
   {
    "default": "0",
    "fieldname": "has_variants",
    "fieldtype": "Check",
-   "label": "Has Variants (Template)"
+   "label": "Has Variants (Template)",
+   "read_only": 1
   },
   {
    "fieldname": "variant_of",
    "fieldtype": "Link",
    "label": "Variant Of",
-   "options": "Item"
+   "options": "Item",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_status",
@@ -88,7 +94,8 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Active\nDisabled\nOrphaned"
+   "options": "Active\nDisabled\nOrphaned",
+   "read_only": 1
   },
   {
    "fieldname": "last_synced_on",
@@ -125,7 +132,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-12 00:00:00.000000",
+ "modified": "2026-07-13 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Item Mapping",

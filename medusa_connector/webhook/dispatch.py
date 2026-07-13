@@ -16,7 +16,7 @@ import json
 import frappe
 from frappe.utils import now_datetime
 
-from medusa_connector.webhook.handlers.base import MedusaEvent
+from medusa_connector.webhook.base import MedusaEvent
 from medusa_connector.webhook.registry import get_handler
 
 # Maximum automatic retries for a failing event before it is left as "Failed".

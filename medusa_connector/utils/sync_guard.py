@@ -112,3 +112,30 @@ def try_claim_product_sync(product_id: str) -> bool:
 		return False
 	cache.set_value(key, 1, expires_in_sec=PRODUCT_SYNC_CLAIM_SEC)
 	return True
+
+
+def release_product_sync_claim(product_id: str | None) -> None:
+	"""Drop the product resync claim so a later status change (e.g. Publish) is not lost."""
+	if not product_id:
+		return
+	frappe.cache().delete_value(f"medusa:product_sync_claim:{product_id}")
+
+
+def enqueue_deferred_product_resync(product_id: str, *, reason: str = "claim busy") -> None:
+	"""Queue a single follow-up full product import after the claim window.
+
+	When ``product.updated`` (e.g. Publish) races with an in-flight create/update
+	sync, the claim skips the later event. A deferred job re-fetches Medusa so
+	status/disabled and other fields still land in ERPNext.
+	"""
+	if not product_id:
+		return
+	frappe.enqueue(
+		"medusa_connector.product.webhook.resync_product_by_id",
+		queue="short",
+		job_id=f"medusa-product-resync-{product_id}",
+		deduplicate=True,
+		enqueue_after_commit=True,
+		product_id=product_id,
+		reason=reason,
+	)

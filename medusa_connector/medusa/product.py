@@ -17,8 +17,12 @@ from medusa_connector.medusa.client import MedusaClient
 
 # Expand relations for import mapping. Use `*relation` form only: bare field lists
 # replace default product fields and drop title/status. See Admin API
-# "Select Fields and Relations".
-DEFAULT_PRODUCT_FIELDS = "*variants,*options,*images,*categories,*tags,*collection,*sales_channels,+metadata"
+# "Select Fields and Relations". Nested option titles + prices for variants.
+DEFAULT_PRODUCT_FIELDS = (
+	"*variants,*variants.options,*variants.options.option,*variants.prices,"
+	"*options,*options.values,*images,*categories,*categories.parent_category,"
+	"*tags,*collection,*type,*sales_channels,+metadata"
+)
 
 
 class ProductService:
@@ -152,3 +156,31 @@ class ProductService:
 			"POST", f"/admin/products/{product_id}/variants/batch", json=payload
 		)
 		return response if isinstance(response, dict) else {}
+
+	def get_variant(self, variant_id: str) -> dict:
+		"""Fetch one Product Variant by id via Admin list API.
+
+		Medusa Admin exposes list/filter on ``GET /admin/product-variants``
+		(``id`` / ``id[]``). There is no reliable ``GET .../product-variants/{id}``
+		route on all versions. Response includes ``product_id`` and ``hs_code``.
+		"""
+		if not variant_id:
+			return {}
+		for params in (
+			{"id": variant_id, "limit": 1},
+			{"id[]": variant_id, "limit": 1},
+		):
+			response = self.client.execute_rest("GET", "/admin/product-variants", params=params)
+			variants = (response or {}).get("variants") or []
+			if variants:
+				return variants[0] if isinstance(variants[0], dict) else {}
+		return {}
+
+	def get_product_variant(self, product_id: str, variant_id: str) -> dict:
+		"""Resolve a variant from the product payload, with admin index fallback."""
+		if product_id:
+			product = self.get_product(product_id)
+			for variant in product.get("variants") or []:
+				if variant.get("id") == variant_id:
+					return variant
+		return self.get_variant(variant_id)

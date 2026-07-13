@@ -160,7 +160,7 @@ scheduler_events = {
 	],
 	"hourly_long": [
 		"medusa_connector.medusa.client.scheduled_health_check",
-		"medusa_connector.medusa.services.webhook_sync.scheduled_webhook_sync",
+		"medusa_connector.medusa.webhook_sync.scheduled_webhook_sync",
 	],
 	"cron": {
 		# Retry failed webhook events that still have attempts remaining.

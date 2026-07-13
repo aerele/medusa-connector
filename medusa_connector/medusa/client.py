@@ -1,8 +1,13 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
+"""Authenticated HTTP client for the Medusa Admin API (REST / GraphQL)."""
+
+from __future__ import annotations
+
 import frappe
-from frappe.utils import get_request_session, now_datetime
+import requests
+from frappe.utils import now_datetime
 
 from medusa_connector.medusa.exceptions import (
 	MedusaAuthError,
@@ -10,18 +15,14 @@ from medusa_connector.medusa.exceptions import (
 	WebhookPluginNotInstalled,
 )
 
-# A trivial GraphQL query used as a GraphQL-mode health check. `__typename` on the
-# root query type is always resolvable when the endpoint is reachable/authenticated.
+# GraphQL health probe — ``__typename`` is always resolvable when authenticated.
 HEALTH_QUERY = "query { __typename }"
 
-# A lightweight authenticated admin endpoint used as a REST-mode health check.
+# Lightweight authenticated admin endpoint for REST health checks.
 REST_HEALTH_PATH = "/admin/regions"
 
-# Admin route exposed by the @lambdacurry/medusa-webhooks plugin.
+# Admin routes for @lambdacurry/medusa-webhooks.
 WEBHOOKS_PATH = "/admin/webhooks"
-
-# Per-request timeout (seconds). Handled in code rather than a settings field.
-DEFAULT_TIMEOUT = 30
 
 
 def get_settings():
@@ -32,9 +33,8 @@ def get_settings():
 class MedusaClient:
 	"""Thin authenticated client that talks to Medusa in REST or GraphQL mode.
 
-	With a static admin API key there is no login/token lifecycle: the "session"
-	is the pooled requests.Session inside ``make_request`` plus the auth header
-	assembled here. The client is cached per request on ``frappe.local``.
+	Uses plain ``requests`` GET/POST (and other verbs via ``execute_rest``) with no
+	session pooling or retry adapter. Cached per request on ``frappe.local``.
 	"""
 
 	def __init__(self, settings=None) -> None:
@@ -52,12 +52,11 @@ class MedusaClient:
 		else:
 			if not self.settings.medusa_base_url:
 				raise MedusaConnectionError(
-					"Please enter the Medusa Base URL before enabling the Medusa Connector."
+					"Medusa Base URL is not configured. Set it, or switch Connection Mode to GraphQL."
 				)
 			# Normalise: drop a trailing slash so path joins are predictable.
 			self.base_url = self.settings.medusa_base_url.rstrip("/")
 
-		self.timeout = DEFAULT_TIMEOUT
 		self._api_key = self._resolve_api_key()
 
 	def _resolve_api_key(self) -> str | None:
@@ -85,60 +84,29 @@ class MedusaClient:
 		return None
 
 	def _request(self, method: str, url: str, **kwargs) -> dict:
-		"""Issue an authenticated request with a hard timeout, mapping failures.
+		"""Issue an authenticated request and return the parsed JSON body.
 
-		Uses the pooled request session directly (rather than ``make_request``) so a
-		connect/read ``timeout`` is always enforced — a background handler must never
-		hang forever on an unresponsive Medusa. Auth failures map to MedusaAuthError;
-		everything else to MedusaConnectionError, both carrying the HTTP status.
+		Sends the call directly with ``requests`` (no shared session, retries, or
+		custom adapters). Auth failures map to MedusaAuthError; other failures map
+		to MedusaConnectionError, both carrying the HTTP status when available.
 		"""
 		try:
-			session = get_request_session()
-			response = session.request(
+			response = requests.request(
 				method,
 				url,
 				auth=self._auth(),
 				headers=self._headers(),
-				timeout=self.timeout,
 				**kwargs,
 			)
 			response.raise_for_status()
 		except Exception as exc:
-			resp = getattr(exc, "response", None)
-			status = getattr(resp, "status_code", None)
-			detail = self._format_error_detail(resp)
-			message = str(exc)
-			if detail:
-				message = f"{message}: {detail}"
+			status = getattr(getattr(exc, "response", None), "status_code", None)
 			if status in (401, 403):
 				raise MedusaAuthError(
 					f"Medusa rejected the credentials (HTTP {status})", status_code=status
 				) from exc
-			raise MedusaConnectionError(message, status_code=status) from exc
+			raise MedusaConnectionError(str(exc), status_code=status) from exc
 		return self._parse(response)
-
-	@staticmethod
-	def _format_error_detail(response) -> str:
-		"""Extract a short error body from a failed HTTP response for logs/sync UI."""
-		if response is None:
-			return ""
-		try:
-			body = response.json()
-		except Exception:
-			text = (getattr(response, "text", None) or "").strip()
-			return text[:1000] if text else ""
-		if not isinstance(body, dict):
-			return str(body)[:1000]
-		# Medusa validation / framework errors commonly use message / type / errors.
-		parts = []
-		for key in ("message", "type", "code"):
-			if body.get(key):
-				parts.append(f"{key}={body[key]}")
-		if body.get("errors"):
-			parts.append(frappe.as_json(body["errors"]))
-		elif not parts and body:
-			parts.append(frappe.as_json(body)[:1000])
-		return "; ".join(parts)
 
 	@staticmethod
 	def _parse(response) -> dict:
@@ -205,20 +173,6 @@ class MedusaClient:
 				return False
 			raise
 
-	@staticmethod
-	def _unwrap_subscription(resp: dict | None) -> dict:
-		"""Normalise create/update responses to a single subscription dict.
-
-		The plugin returns ``{"subscription": {...}}``. MedusaService helpers
-		sometimes serialise a one-item list — accept both shapes.
-		"""
-		if not resp or not isinstance(resp, dict):
-			return {}
-		data = resp.get("webhook") or resp.get("subscription") or resp
-		if isinstance(data, list):
-			return data[0] if data and isinstance(data[0], dict) else {}
-		return data if isinstance(data, dict) else {}
-
 	def list_webhooks(self) -> list[dict]:
 		"""Return every webhook subscription registered in Medusa (all pages)."""
 		self._require_rest()
@@ -229,8 +183,6 @@ class MedusaClient:
 			if resp.get("statusCode") == 404 or resp is None:
 				raise WebhookPluginNotInstalled("Medusa webhooks plugin is not installed")
 			page = resp.get("subscriptions") or resp.get("webhooks") or []
-			if not isinstance(page, list):
-				page = []
 			subscriptions.extend(page)
 			count = resp.get("count")
 			offset += limit
@@ -246,22 +198,7 @@ class MedusaClient:
 			WEBHOOKS_PATH,
 			json={"event_type": event_type, "target_url": target_url, "active": active},
 		)
-		return self._unwrap_subscription(resp)
-
-	def update_webhook(self, webhook_id: str, event_type: str, target_url: str, active: bool = True) -> dict:
-		"""Update an existing webhook subscription (event, URL, active flag)."""
-		self._require_rest()
-		resp = self.execute_rest(
-			"PUT",
-			f"{WEBHOOKS_PATH}/{webhook_id}",
-			json={
-				"id": webhook_id,
-				"event_type": event_type,
-				"target_url": target_url,
-				"active": active,
-			},
-		)
-		return self._unwrap_subscription(resp)
+		return resp.get("webhook") or resp.get("subscription") or resp
 
 	def delete_webhook(self, webhook_id: str) -> None:
 		"""Delete a webhook subscription by its Medusa id."""
@@ -270,24 +207,21 @@ class MedusaClient:
 
 
 def get_client() -> MedusaClient:
-	"""Return a per-request cached MedusaClient."""
+	"""Per-request cached MedusaClient."""
 	if not getattr(frappe.local, "_medusa_client", None):
 		frappe.local._medusa_client = MedusaClient()
 	return frappe.local._medusa_client
 
 
 def execute_graphql(query: str, variables: dict | None = None) -> dict:
-	"""Module-level convenience wrapper around ``MedusaClient.execute_graphql``."""
 	return get_client().execute_graphql(query, variables)
 
 
 def execute_rest(method: str, path: str, params: dict | None = None, json: dict | None = None) -> dict:
-	"""Module-level convenience wrapper around ``MedusaClient.execute_rest``."""
 	return get_client().execute_rest(method, path, params=params, json=json)
 
 
 def _update_status(status: str, message: str) -> None:
-	"""Persist the connection health onto Medusa Settings."""
 	settings = frappe.get_single("Medusa Settings")
 	settings.db_set(
 		{
@@ -300,11 +234,7 @@ def _update_status(status: str, message: str) -> None:
 
 
 def test_connection() -> dict:
-	"""Run the mode-appropriate health probe, persist the result, and return a summary.
-
-	On success, also refreshes Medusa store defaults (sales channel, currency,
-	region, location) onto Medusa Settings.
-	"""
+	"""Run the mode-appropriate health probe, persist the result, and return a summary."""
 	try:
 		# Build a fresh client so a just-saved mode/key/url is picked up.
 		client = MedusaClient()
@@ -316,25 +246,13 @@ def test_connection() -> dict:
 		_update_status("Error", str(exc))
 		return {"status": "Error", "message": str(exc)}
 
-	defaults = {}
-	try:
-		from medusa_connector.utils.store_defaults import refresh_store_defaults
-
-		defaults = refresh_store_defaults(client, commit=True)
-	except Exception as exc:
-		frappe.log_error(
-			title="Medusa: store defaults refresh failed",
-			message=frappe.get_traceback(with_context=True),
-		)
-		defaults = {"error": str(exc)}
-
 	message = f"Connection successful ({client.mode})."
 	_update_status("Connected", message)
-	return {"status": "Connected", "message": message, "store_defaults": defaults}
+	return {"status": "Connected", "message": message}
 
 
 def scheduled_health_check() -> None:
-	"""Hourly scheduler hook: refresh connection status when the connector is enabled."""
+	"""Hourly scheduler: refresh connection status when the connector is enabled."""
 	if not frappe.db.get_single_value("Medusa Settings", "enabled"):
 		return
 	test_connection()

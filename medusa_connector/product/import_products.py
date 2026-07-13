@@ -16,7 +16,6 @@ from medusa_connector.constants import (
 	PRODUCT_SYNC_REALTIME_KEY,
 	SETTING_DOCTYPE,
 )
-from medusa_connector.mapper.product_mapper import ProductMapper
 from medusa_connector.medusa.product import ProductService
 from medusa_connector.medusa_connector.doctype.medusa_item_mapping.medusa_item_mapping import (
 	get_mapping_health,
@@ -26,7 +25,8 @@ from medusa_connector.medusa_connector.doctype.medusa_sync_log.medusa_sync_log i
 	create_sync_log,
 	update_sync_log,
 )
-from medusa_connector.sync.product_sync import ProductSync
+from medusa_connector.product.mapper import ProductMapper
+from medusa_connector.product.sync import ProductSync
 
 
 def import_single_product(product_id: str, *, force: bool = True) -> dict:
@@ -311,7 +311,6 @@ def health_check() -> dict:
 	connection = {"ok": False, "message": ""}
 	try:
 		client = MedusaClient()
-		client.timeout = 10
 		client.health_check()
 		connection = {"ok": True, "message": "Connected"}
 	except Exception as exc:

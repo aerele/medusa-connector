@@ -100,7 +100,7 @@ module.exports = defineConfig({
           "order.return_requested",
           "order.return_received",
 
-          // Inventory
+          // Inventory (ERPNext short names; see Step 5 note on module event mapping)
           "inventory-item.created",
           "inventory-item.updated",
           "inventory-item.deleted",
@@ -190,11 +190,13 @@ export const config: SubscriberConfig = {
     "order.return_requested",
     "order.return_received",
 
-    // Inventory
-    "inventory-item.created",
-    "inventory-item.updated",
-    "inventory-item.deleted",
-    "inventory-level.updated",
+    // Inventory — Medusa *module* event names (what is actually emitted).
+    // Core inventory workflows do not emit short names like inventory-item.updated.
+    // Map these to connector short names in the handler (see toConnectorEventName below).
+    "inventory.inventory-item.created",
+    "inventory.inventory-item.updated",
+    "inventory.inventory-item.deleted",
+    "inventory.inventory-level.updated",
 
     // Price
     "price-list.created",
@@ -222,14 +224,35 @@ export const config: SubscriberConfig = {
   context: { subscriberId: "erpnext-webhook-forwarder" },
 }
 
+/** Map Inventory module event names → ERPNext connector short names. */
+function toConnectorEventName(name: string): string {
+  if (name.startsWith("inventory.inventory-item.")) {
+    return name.replace("inventory.inventory-item.", "inventory-item.")
+  }
+  if (name.startsWith("inventory.inventory-level.")) {
+    return name.replace("inventory.inventory-level.", "inventory-level.")
+  }
+  return name
+}
+
 export default async function forwardToErpnext({
   event, container,
 }: SubscriberArgs<{ id: string }>): Promise<void> {
   await fullWebhooksSubscriptionsWorkflow(container).run({
-    input: { eventName: event.name, eventData: event.data },
+    input: {
+      eventName: toConnectorEventName(event.name),
+      eventData: event.data,
+    },
   })
 }
 ```
+
+> **Why inventory uses different names:** Medusa’s Inventory *module* emits
+> `inventory.inventory-item.updated` (and related) via internal `@EmitEvents`.
+> Core inventory workflows do **not** call `emitEventStep`, so short names like
+> `inventory-item.updated` are never fired. The forwarder must subscribe to the
+> module names and map them to the connector’s short names so **Sync Webhooks**
+> subscriptions match.
 
 The `subscriptions` option, this subscriber's `event` list, and the ERPNext connector's registered event handlers should remain in sync. When support for a new Medusa resource is added, update all three together and re-run **Sync Webhooks**.
 

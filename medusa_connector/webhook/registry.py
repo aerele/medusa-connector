@@ -3,20 +3,30 @@
 
 """Central event → handler registry.
 
-This is the single source of truth that both ends of the connector read:
+Single source of truth for:
 
-* the **sync service** asks :func:`registered_events` for the set of Medusa
-  events it must register as webhooks, and
-* the **dispatcher** asks :func:`get_handler` which handler processes an
-  incoming event.
+* **webhook sync** — :func:`registered_events` (which Medusa events to subscribe)
+* **dispatcher** — :func:`get_handler` (which handler processes a delivery)
 
-Adding support for a new Medusa event is therefore a one-file change: drop a
-handler class into ``webhook/handlers/`` decorated with ``@register("event.name")``
-— no edits to the receiver, dispatcher, or settings are required (Open/Closed).
+Handlers register via ``@register`` from domain modules:
+
+* ``product.webhook`` — real product import
+* ``order.webhook`` — order lifecycle stubs
+* ``webhook.stubs`` — catalog / master-data stubs
 """
+
+from __future__ import annotations
 
 _HANDLERS: dict[str, type] = {}
 _LOADED = False
+
+# Domain modules that call ``@register`` on import.
+_HANDLER_MODULES = (
+	"medusa_connector.product.webhook",
+	"medusa_connector.product.inventory_webhook",
+	"medusa_connector.order.webhook",
+	"medusa_connector.webhook.stubs",
+)
 
 
 def register(*events: str):
@@ -32,12 +42,13 @@ def register(*events: str):
 
 
 def _ensure_loaded() -> None:
-	"""Import the handlers package once so decorators populate the registry."""
+	"""Import handler modules once so decorators populate the registry."""
 	global _LOADED
-	if not _LOADED:
-		import medusa_connector.webhook.handlers  # (import triggers registration)
-
-		_LOADED = True
+	if _LOADED:
+		return
+	for path in _HANDLER_MODULES:
+		__import__(path)
+	_LOADED = True
 
 
 def get_handler(event_name: str):

@@ -1,4 +1,4 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""Medusa Admin API communication only (client, product, inventory, webhook sync)."""
+"""Order domain: Medusa order / payment / fulfillment webhooks (stubs)."""

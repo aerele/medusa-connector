@@ -14,6 +14,12 @@ from __future__ import annotations
 
 from medusa_connector.medusa.client import MedusaClient
 
+# Expand product variants linked to an inventory item (Admin Inventory Item model).
+DEFAULT_INVENTORY_ITEM_FIELDS = (
+	"*variants,*location_levels,+hs_code,+mid_code,+origin_country,+material,"
+	"+weight,+length,+height,+width,+sku,+title,+thumbnail,+metadata"
+)
+
 
 class InventoryService:
 	"""Access inventory items and location levels through the shared Medusa client."""
@@ -21,8 +27,14 @@ class InventoryService:
 	def __init__(self, client: MedusaClient | None = None) -> None:
 		self.client = client or MedusaClient()
 
-	def get_inventory_item(self, inventory_item_id: str) -> dict:
-		response = self.client.execute_rest("GET", f"/admin/inventory-items/{inventory_item_id}")
+	def get_inventory_item(
+		self, inventory_item_id: str, *, fields: str | None = DEFAULT_INVENTORY_ITEM_FIELDS
+	) -> dict:
+		"""``GET /admin/inventory-items/{id}`` with optional relation expand."""
+		params = {"fields": fields} if fields else None
+		response = self.client.execute_rest(
+			"GET", f"/admin/inventory-items/{inventory_item_id}", params=params
+		)
 		return response.get("inventory_item", response) if isinstance(response, dict) else {}
 
 	def list_inventory_items(self, *, limit: int = 50, offset: int = 0, q: str | None = None) -> dict:

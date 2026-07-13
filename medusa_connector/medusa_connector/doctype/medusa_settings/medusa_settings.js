@@ -10,67 +10,20 @@ frappe.ui.form.on("Medusa Settings", {
 	},
 
 	enabled(frm) {
-		if (!frm.doc.enabled) {
-			toggle_buttons(frm);
-		}
+		toggle_buttons(frm);
 	},
 });
 
 function toggle_buttons(frm) {
-	frm.remove_custom_button(__("Test Connection"));
-	frm.remove_custom_button(__("Refresh Store Defaults"));
 	frm.remove_custom_button(__("Sync Webhooks"));
 	frm.remove_custom_button(__("Regenerate Webhook Secret"));
 	frm.remove_custom_button(__("Sync Products"));
 	frm.remove_custom_button(__("View Item Mappings"));
-	frm.remove_custom_button(__("View Sync Logs"));
 	frm.remove_custom_button(__("View Webhook Logs"));
 
 	if (!frm.doc.enabled) {
 		return;
 	}
-
-	frm.add_custom_button(
-		__("Test Connection"),
-		() => {
-			frappe.call({
-				method: "medusa_connector.medusa_connector.doctype.medusa_settings.medusa_settings.test_connection",
-				freeze: true,
-				freeze_message: __("Testing Medusa connection…"),
-				callback: (r) => {
-					const m = r.message || {};
-					frm.reload_doc();
-					const indicator =
-						m.status === "Connected"
-							? "green"
-							: m.status === "Auth Failed"
-							? "red"
-							: "orange";
-					frappe.show_alert({ message: m.message || m.status, indicator });
-				},
-			});
-		},
-		__("Connection")
-	);
-
-	frm.add_custom_button(
-		__("Refresh Store Defaults"),
-		() => {
-			frappe.call({
-				method: "medusa_connector.medusa_connector.doctype.medusa_settings.medusa_settings.refresh_store_defaults",
-				freeze: true,
-				freeze_message: __("Fetching Medusa store defaults…"),
-				callback: (r) => {
-					frm.reload_doc();
-					const m = r.message || {};
-					if (m.ok) {
-						frappe.show_alert({ message: m.message, indicator: "green" });
-					}
-				},
-			});
-		},
-		__("Connection")
-	);
 
 	frm.add_custom_button(
 		__("Sync Products"),
@@ -84,14 +37,6 @@ function toggle_buttons(frm) {
 		__("View Item Mappings"),
 		() => {
 			frappe.set_route("List", "Medusa Item Mapping");
-		},
-		__("Products")
-	);
-
-	frm.add_custom_button(
-		__("View Sync Logs"),
-		() => {
-			frappe.set_route("List", "Medusa Sync Log");
 		},
 		__("Products")
 	);

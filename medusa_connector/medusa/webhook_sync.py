@@ -43,10 +43,6 @@ STATUS_FAILED = "Failed"
 STATUS_SKIPPED = "Skipped"
 STATUS_REMOVED = "Removed"
 
-# Bounded timeout for the interactive/scheduled sync so the button or worker is
-# never stalled for long on a slow/unreachable Medusa.
-SYNC_TIMEOUT = 30
-
 # Single-flight lock so overlapping syncs cannot create duplicate registrations.
 SYNC_LOCK_KEY = "medusa_connector:webhook_sync_lock"
 SYNC_LOCK_TTL = 180
@@ -125,7 +121,6 @@ class WebhookSyncService:
 		# a scheduler tick, or the button.
 		try:
 			client = MedusaClient(settings=self.settings)
-			client.timeout = SYNC_TIMEOUT
 			installed = client.webhook_plugin_installed()
 			existing = client.list_webhooks() if installed else []
 		except MedusaConnectorError as exc:

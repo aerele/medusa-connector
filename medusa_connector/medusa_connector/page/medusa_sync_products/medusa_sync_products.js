@@ -17,7 +17,7 @@ class ProductSyncPage {
 		this.offset = 0;
 		this.limit = 20;
 		this.syncRunning = false;
-		this.summary = { created: 0, updated: 0, skipped: 0, failed: 0 };
+		this._filterTimer = null;
 		this.init();
 	}
 
@@ -27,31 +27,66 @@ class ProductSyncPage {
 			() => this.bindActions(),
 			() => this.fetchCounts(),
 			() => this.refreshTable(),
-			() => this.loadHealth(),
 			() => this.checkSyncStatus(),
 		]);
 	}
 
 	addMarkup() {
 		this.wrapper.append(`
-			<div class="row">
+			<style>
+				.medusa-sync-page .medusa-toolbar {
+					display: flex;
+					align-items: center;
+					gap: 8px;
+					flex-wrap: wrap;
+				}
+				.medusa-sync-page .medusa-toolbar .form-control {
+					height: 28px;
+					min-height: 28px;
+				}
+				.medusa-sync-page .medusa-action-cell {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					width: 100%;
+					min-height: 28px;
+				}
+				.medusa-sync-page .medusa-action-cell .btn {
+					min-width: 72px;
+					margin: 0;
+					line-height: 1.2;
+				}
+				.medusa-sync-page .dt-cell__content {
+					align-items: center;
+				}
+				.medusa-sync-page .product-count > div {
+					display: flex;
+					flex-direction: column;
+					align-items: center;
+					justify-content: center;
+				}
+				.medusa-sync-page #btn-sync-all {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				}
+			</style>
+			<div class="row medusa-sync-page">
 				<div class="col-lg-8 d-flex align-items-stretch">
 					<div class="card border-0 shadow-sm p-3 mb-3 w-100 rounded-sm" style="background-color: var(--card-bg)">
-						<div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+						<div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2 flex-wrap" style="gap: 8px;">
 							<h5 class="mb-0">${__("Products in Medusa")}</h5>
-							<div class="d-flex" style="gap: 8px;">
+							<div class="medusa-toolbar">
 								<input type="text" class="form-control form-control-sm" id="medusa-product-q"
-									placeholder="${__("Search…")}" style="width: 160px;">
-								<select class="form-control form-control-sm" id="medusa-product-status" style="width: 130px;">
+									placeholder="${__("Search product name…")}" style="width: 180px;"
+									autocomplete="off">
+								<select class="form-control form-control-sm" id="medusa-product-status" style="width: 140px;">
 									<option value="">${__("All statuses")}</option>
 									<option value="published">${__("Published")}</option>
 									<option value="draft">${__("Draft")}</option>
 									<option value="proposed">${__("Proposed")}</option>
 									<option value="rejected">${__("Rejected")}</option>
 								</select>
-								<button type="button" class="btn btn-sm btn-default" id="btn-filter-products">${__(
-									"Filter"
-								)}</button>
 							</div>
 						</div>
 						<div id="medusa-product-list"><div class="text-center text-muted py-4">${__(
@@ -67,14 +102,11 @@ class ProductSyncPage {
 				</div>
 				<div class="col-lg-4">
 					<div class="card border-0 shadow-sm p-3 mb-3 rounded-sm" style="background-color: var(--card-bg)">
-						<h5 class="border-bottom pb-2">${__("Synchronization")}</h5>
-						<button type="button" id="btn-sync-full" class="btn btn-primary w-100 font-weight-bold py-2 mb-2">
-							${__("Full Sync")}
+						<h5 class="border-bottom pb-2 mb-3">${__("Synchronization")}</h5>
+						<button type="button" id="btn-sync-all" class="btn btn-primary w-100 font-weight-bold py-2 mb-3">
+							${__("Sync All Products")}
 						</button>
-						<button type="button" id="btn-sync-incremental" class="btn btn-default w-100 py-2 mb-3">
-							${__("Incremental Sync")}
-						</button>
-						<div class="product-count d-flex justify-content-stretch mb-2">
+						<div class="product-count d-flex justify-content-stretch mb-0">
 							<div class="text-center p-2 mx-1 rounded w-100" style="background-color: var(--bg-color)">
 								<h3 id="count-medusa" class="mb-0">-</h3>
 								<p class="text-muted m-0 small">${__("Medusa")}</p>
@@ -88,31 +120,6 @@ class ProductSyncPage {
 								<p class="text-muted m-0 small">${__("Synced")}</p>
 							</div>
 						</div>
-						<div class="border-top pt-2">
-							<div class="small text-muted mb-1">${__("Import summary (this session)")}</div>
-							<div class="d-flex flex-wrap" style="gap: 6px;">
-								<span class="indicator-pill green" id="sum-created">0 ${__("Created")}</span>
-								<span class="indicator-pill blue" id="sum-updated">0 ${__("Updated")}</span>
-								<span class="indicator-pill orange" id="sum-skipped">0 ${__("Skipped")}</span>
-								<span class="indicator-pill red" id="sum-failed">0 ${__("Failed")}</span>
-							</div>
-						</div>
-						<div class="mt-3 d-flex flex-column" style="gap: 6px;">
-							<button type="button" class="btn btn-xs btn-default" id="btn-open-mappings">
-								${__("Open Item Mappings")}
-							</button>
-							<button type="button" class="btn btn-xs btn-default" id="btn-open-sync-logs">
-								${__("Open Sync Logs")}
-							</button>
-							<button type="button" class="btn btn-xs btn-default" id="btn-refresh-health">
-								${__("Refresh Health")}
-							</button>
-						</div>
-					</div>
-
-					<div class="card border-0 shadow-sm p-3 mb-3 rounded-sm" style="background-color: var(--card-bg)">
-						<h5 class="border-bottom pb-2">${__("Health")}</h5>
-						<div id="medusa-health" class="small text-muted">${__("Checking…")}</div>
 					</div>
 
 					<div class="card border-0 shadow-sm p-3 mb-3 rounded-sm" style="background-color: var(--card-bg); display:none;" id="sync-log-card">
@@ -130,7 +137,25 @@ class ProductSyncPage {
 	}
 
 	bindActions() {
-		this.wrapper.on("click", "#btn-filter-products", () => {
+		// Live search: debounce typing so filter applies automatically.
+		this.wrapper.on("input", "#medusa-product-q", () => {
+			clearTimeout(this._filterTimer);
+			this._filterTimer = setTimeout(() => {
+				this.offset = 0;
+				this.refreshTable();
+			}, 350);
+		});
+		// Enter still applies immediately.
+		this.wrapper.on("keydown", "#medusa-product-q", (e) => {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				clearTimeout(this._filterTimer);
+				this.offset = 0;
+				this.refreshTable();
+			}
+		});
+		// Status changes apply filter immediately.
+		this.wrapper.on("change", "#medusa-product-status", () => {
 			this.offset = 0;
 			this.refreshTable();
 		});
@@ -146,15 +171,7 @@ class ProductSyncPage {
 		});
 		this.wrapper.on("click", ".btn-sync-one", (e) => this.syncOne($(e.currentTarget)));
 		this.wrapper.on("click", ".btn-resync-one", (e) => this.syncOne($(e.currentTarget), true));
-		this.wrapper.on("click", "#btn-sync-full", () => this.startBulk("Full"));
-		this.wrapper.on("click", "#btn-sync-incremental", () => this.startBulk("Incremental"));
-		this.wrapper.on("click", "#btn-open-mappings", () =>
-			frappe.set_route("List", "Medusa Item Mapping")
-		);
-		this.wrapper.on("click", "#btn-open-sync-logs", () =>
-			frappe.set_route("List", "Medusa Sync Log")
-		);
-		this.wrapper.on("click", "#btn-refresh-health", () => this.loadHealth());
+		this.wrapper.on("click", "#btn-sync-all", () => this.startBulk());
 	}
 
 	async fetchCounts() {
@@ -166,7 +183,7 @@ class ProductSyncPage {
 			this.wrapper.find("#count-erpnext").text(message.erpnextCount ?? "-");
 			this.wrapper.find("#count-synced").text(message.syncedCount ?? "-");
 		} catch (e) {
-			/* connection errors surface in health card */
+			/* ignore — counts optional when Medusa is unreachable */
 		}
 	}
 
@@ -182,7 +199,11 @@ class ProductSyncPage {
 			});
 			this.nextOffset = message.nextOffset;
 			this.prevOffset = message.prevOffset;
-			const rows = (message.products || []).map((p) => ({
+			// Continuous S.No across pages: page 2 starts at offset+1 (e.g. 21, 22…).
+			const base = cint(this.offset) || 0;
+			const products = message.products || [];
+			const rows = products.map((p, idx) => ({
+				[__("S.No")]: base + idx + 1,
 				[__("Medusa Product ID")]: p.id,
 				[__("Product Name")]: frappe.utils.escape_html(p.title || ""),
 				[__("SKU")]: frappe.utils.escape_html(p.sku || ""),
@@ -191,49 +212,51 @@ class ProductSyncPage {
 					? `<span class="indicator-pill green">${__("Synced")}</span>`
 					: `<span class="indicator-pill orange">${__("Not Synced")}</span>`,
 				[__("Actions")]: p.synced
-					? `<button type="button" class="btn btn-default btn-xs btn-resync-one" data-id="${
+					? `<div class="medusa-action-cell"><button type="button" class="btn btn-default btn-xs btn-resync-one" data-id="${
 							p.id
-					  }">${__("Re-sync")}</button>`
-					: `<button type="button" class="btn btn-default btn-xs btn-sync-one" data-id="${
+					  }">${__("Re-sync")}</button></div>`
+					: `<div class="medusa-action-cell"><button type="button" class="btn btn-default btn-xs btn-sync-one" data-id="${
 							p.id
-					  }">${__("Sync")}</button>`,
+					  }">${__("Sync")}</button></div>`,
 			}));
-			if (!this.table) {
-				this.table = new frappe.DataTable(list[0], {
-					columns: [
-						{ name: __("Medusa Product ID"), editable: false, focusable: false },
-						{ name: __("Product Name"), editable: false, focusable: false },
-						{ name: __("SKU"), editable: false, focusable: false },
-						{
-							name: __("Medusa Status"),
-							editable: false,
-							focusable: false,
-							align: "center",
-						},
-						{
-							name: __("ERPNext Sync Status"),
-							editable: false,
-							focusable: false,
-							align: "center",
-						},
-						{
-							name: __("Actions"),
-							editable: false,
-							focusable: false,
-							align: "center",
-						},
-					],
-					data: rows,
-					layout: "fluid",
-				});
-			} else {
-				list.empty();
-				this.table = new frappe.DataTable(list[0], {
-					columns: this.table.options.columns,
-					data: rows,
-					layout: "fluid",
-				});
-			}
+			const columns = [
+				{
+					name: __("S.No"),
+					editable: false,
+					focusable: false,
+					align: "center",
+					width: 60,
+				},
+				{ name: __("Medusa Product ID"), editable: false, focusable: false },
+				{ name: __("Product Name"), editable: false, focusable: false },
+				{ name: __("SKU"), editable: false, focusable: false },
+				{
+					name: __("Medusa Status"),
+					editable: false,
+					focusable: false,
+					align: "center",
+				},
+				{
+					name: __("ERPNext Sync Status"),
+					editable: false,
+					focusable: false,
+					align: "center",
+				},
+				{
+					name: __("Actions"),
+					editable: false,
+					focusable: false,
+					align: "center",
+					width: 100,
+				},
+			];
+			list.empty();
+			this.table = new frappe.DataTable(list[0], {
+				columns,
+				data: rows,
+				layout: "fluid",
+				serialNoColumn: false,
+			});
 			this.wrapper.find(".medusa-datatable-footer").show();
 			this.wrapper.find(".btn-prev").prop("disabled", this.prevOffset == null);
 			this.wrapper.find(".btn-next").prop("disabled", this.nextOffset == null);
@@ -263,7 +286,6 @@ class ProductSyncPage {
 				args: { product_id: productId },
 			});
 			if (message && message.ok) {
-				this.bumpSummary(message.action);
 				frappe.show_alert({
 					message: __("{0}: {1}", [message.action, message.item_code]),
 					indicator: "green",
@@ -271,30 +293,26 @@ class ProductSyncPage {
 				this.fetchCounts();
 				this.refreshTable();
 			} else {
-				this.bumpSummary("failed");
 				frappe.msgprint(message?.error || __("Sync failed"));
 			}
 		} catch (e) {
-			this.bumpSummary("failed");
 			frappe.msgprint(__("Sync failed"));
 		} finally {
 			$btn.prop("disabled", false).text(resync ? __("Re-sync") : __("Sync"));
 		}
 	}
 
-	async startBulk(mode) {
+	async startBulk() {
 		if (this.syncRunning) {
 			frappe.msgprint(__("Sync already in progress"));
 			return;
 		}
 		const q = this.wrapper.find("#medusa-product-q").val();
 		const status = this.wrapper.find("#medusa-product-status").val();
-		this.summary = { created: 0, updated: 0, skipped: 0, failed: 0 };
-		this.renderSummary();
 		try {
 			const { message } = await frappe.call({
 				method: "medusa_connector.medusa_connector.page.medusa_sync_products.medusa_sync_products.start_sync",
-				args: { mode, q, status, force: 1 },
+				args: { mode: "Full", q, status, force: 1 },
 			});
 			if (message?.status === "Busy") {
 				frappe.msgprint(message.message);
@@ -327,22 +345,15 @@ class ProductSyncPage {
 		this.syncRunning = true;
 
 		frappe.realtime.on("medusa.key.sync.products", (payload) => {
-			const { message, synced, error, done } = payload || {};
+			const { message, synced, done } = payload || {};
 			if (message) {
 				$log.append(`<pre class="mb-0">${message}</pre>`);
 				$log.scrollTop($log[0].scrollHeight);
 			}
 			if (synced) {
-				// Live counter: treat synced events as updates in bulk path
-				this.summary.updated += 1;
-				this.renderSummary();
 				const el = this.wrapper.find("#count-synced");
 				const n = parseInt(el.text(), 10);
 				if (!isNaN(n)) el.text(n + 1);
-			}
-			if (error) {
-				this.summary.failed += 1;
-				this.renderSummary();
 			}
 			if (done) {
 				frappe.realtime.off("medusa.key.sync.products");
@@ -350,59 +361,15 @@ class ProductSyncPage {
 				this.syncRunning = false;
 				this.fetchCounts();
 				this.refreshTable();
-				this.loadHealth();
 			}
 		});
 	}
 
 	toggleBulkButtons(running) {
 		this.syncRunning = running;
-		this.wrapper.find("#btn-sync-full, #btn-sync-incremental").prop("disabled", running);
-		this.wrapper.find("#btn-sync-full").text(running ? __("Syncing…") : __("Full Sync"));
-	}
-
-	bumpSummary(action) {
-		if (action === "created") this.summary.created += 1;
-		else if (action === "updated") this.summary.updated += 1;
-		else if (action === "skipped") this.summary.skipped += 1;
-		else this.summary.failed += 1;
-		this.renderSummary();
-	}
-
-	renderSummary() {
-		this.wrapper.find("#sum-created").text(`${this.summary.created} ${__("Created")}`);
-		this.wrapper.find("#sum-updated").text(`${this.summary.updated} ${__("Updated")}`);
-		this.wrapper.find("#sum-skipped").text(`${this.summary.skipped} ${__("Skipped")}`);
-		this.wrapper.find("#sum-failed").text(`${this.summary.failed} ${__("Failed")}`);
-	}
-
-	async loadHealth() {
-		const $el = this.wrapper.find("#medusa-health");
-		try {
-			const { message } = await frappe.call({
-				method: "medusa_connector.medusa_connector.page.medusa_sync_products.medusa_sync_products.get_health",
-			});
-			const conn = message.connection || {};
-			const map = message.mapping || {};
-			$el.html(`
-				<div class="mb-2">
-					<strong>${__("Connection")}:</strong>
-					<span class="indicator-pill ${conn.ok ? "green" : "red"}">${
-				conn.ok ? __("OK") : __("Error")
-			}</span>
-					<div class="text-muted">${frappe.utils.escape_html(conn.message || "")}</div>
-				</div>
-				<div>
-					<strong>${__("Mappings")}:</strong> ${map.total ?? 0}<br>
-					<span class="text-muted">
-						${__("Orphaned")}: ${map.orphaned_count ?? 0} ·
-						${__("Missing Items")}: ${map.missing_item_count ?? 0} ·
-						${__("Duplicates")}: ${map.duplicate_count ?? 0}
-					</span>
-				</div>
-			`);
-		} catch (e) {
-			$el.html(`<span class="text-danger">${__("Health check failed")}</span>`);
-		}
+		this.wrapper.find("#btn-sync-all").prop("disabled", running);
+		this.wrapper
+			.find("#btn-sync-all")
+			.text(running ? __("Syncing…") : __("Sync All Products"));
 	}
 }
