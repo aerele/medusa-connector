@@ -11,8 +11,10 @@ Single source of truth for:
 Handlers register via ``@register`` from domain modules:
 
 * ``product.webhook`` — real product import
-* ``order.webhook`` — order lifecycle stubs
-* ``webhook.stubs`` — catalog / master-data stubs
+* ``product.inventory_webhook`` — inventory item metadata
+* ``customer.webhook`` — Medusa → ERPNext Customer / Contact / Address
+* ``order.webhook`` — order lifecycle
+* ``webhook.stubs`` — remaining catalog / master-data stubs
 """
 
 from __future__ import annotations
@@ -21,9 +23,11 @@ _HANDLERS: dict[str, type] = {}
 _LOADED = False
 
 # Domain modules that call ``@register`` on import.
+# Real domain handlers must load before stubs that might share event names.
 _HANDLER_MODULES = (
 	"medusa_connector.product.webhook",
 	"medusa_connector.product.inventory_webhook",
+	"medusa_connector.customer.webhook",
 	"medusa_connector.order.webhook",
 	"medusa_connector.webhook.stubs",
 )

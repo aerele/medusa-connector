@@ -131,19 +131,18 @@ class ProductVariantHandler(BaseHandler):
 		if event.name == "product-variant.deleted":
 			if product_id:
 				return self._resync_product(product_id, event.name, force=True)
-			name = frappe.db.exists("Medusa Item Mapping", {"medusa_variant_id": variant_id})
-			if name:
-				frappe.db.set_value("Medusa Item Mapping", name, "status", "Orphaned")
-				item_code = frappe.db.get_value("Medusa Item Mapping", name, "erpnext_item_code")
-				if item_code and frappe.db.exists("Item", item_code):
-					item = frappe.get_doc("Item", item_code)
-					item.disabled = 1
-					item.flags.from_medusa = True
-					item.flags.from_integration = True
-					item.flags.dont_update_variants = True
-					item.flags.ignore_mandatory = True
-					item.save(ignore_permissions=True)
-				return f"{event.name}: orphaned {variant_id}"
+			from medusa_connector.constants import MODULE_NAME
+
+			item_code = frappe.db.get_value(
+				"Ecommerce Item",
+				{"integration": MODULE_NAME, "variant_id": variant_id},
+				"erpnext_item_code",
+			)
+			if item_code and frappe.db.exists("Item", item_code):
+				item = frappe.get_doc("Item", item_code)
+				item.disabled = 1
+				ProductSync._save_item(item)
+				return f"{event.name}: disabled {item_code} for variant {variant_id}"
 			return f"{event.name}: no mapping for {variant_id}"
 
 		if not product_id:
@@ -180,22 +179,36 @@ class ProductVariantHandler(BaseHandler):
 
 		Order:
 		1. Payload fields (``product_id`` / nested ``product.id``)
-		2. Existing Medusa Item Mapping
+		2. Existing Ecommerce Item (variant_id)
 		3. Admin API ``GET /admin/product-variants`` (with short retries for create race)
 		"""
+		from medusa_connector.constants import MODULE_NAME
+
 		entity = entity or {}
 		product_id = entity.get("product_id") or (entity.get("product") or {}).get("id")
 		if product_id:
 			return product_id
 
 		if variant_id:
-			mapped = frappe.db.get_value(
-				"Medusa Item Mapping",
-				{"medusa_variant_id": variant_id},
-				"medusa_product_id",
+			from medusa_connector.product.item_mapping import get_medusa_product_id_from_row
+
+			row = frappe.db.get_value(
+				"Ecommerce Item",
+				{"integration": MODULE_NAME, "variant_id": variant_id},
+				["integration_item_code", "variant_id", "variant_of", "has_variants"],
+				as_dict=True,
 			)
-			if mapped:
-				return mapped
+			if not row:
+				row = frappe.db.get_value(
+					"Ecommerce Item",
+					{"integration": MODULE_NAME, "integration_item_code": variant_id},
+					["integration_item_code", "variant_id", "variant_of", "has_variants"],
+					as_dict=True,
+				)
+			if row:
+				pid = get_medusa_product_id_from_row(row, fetch_if_missing=False)
+				if pid:
+					return pid
 
 			# New variants: payload is often only {"id": "variant_…"}.
 			return self._fetch_product_id_from_medusa(variant_id)

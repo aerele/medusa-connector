@@ -26,8 +26,22 @@
   "section_customers",
   "customer_group",
   "default_customer",
+  "section_orders",
+  "company",
+  "cost_center",
+  "sales_order_series",
+  "column_break_orders",
+  "sync_sales_invoice",
+  "sales_invoice_series",
+  "cash_bank_account",
+  "section_order_taxes",
+  "default_sales_tax_account",
+  "default_shipping_charges_account",
+  "column_break_order_tax",
+  "consolidate_taxes",
+  "add_shipping_as_item",
+  "shipping_item",
   "section_products",
-  "warehouse",
   "item_group",
   "default_stock_uom",
   "price_list",
@@ -37,13 +51,18 @@
   "sync_new_item_as_published",
   "upload_variants_as_items",
   "on_item_delete",
-  "section_inventory",
-  "update_erpnext_stock_levels_to_medusa",
-  "inventory_sync_frequency",
-  "last_inventory_sync",
   "section_product_status",
   "last_product_sync",
   "last_product_sync_message",
+  "section_inventory",
+  "warehouse",
+  "update_erpnext_stock_levels_to_medusa",
+  "inventory_sync_frequency",
+  "column_break_inv",
+  "last_inventory_sync",
+  "section_warehouse_mapping",
+  "fetch_medusa_locations",
+  "warehouse_mapping",
   "section_webhook",
   "webhook_secret",
   "column_break_wh",
@@ -173,7 +192,7 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Default stock location for inventory level updates.",
+   "description": "Primary stock location from Medusa store defaults (also used when seeding warehouse mapping).",
    "fieldname": "default_location_id",
    "fieldtype": "Data",
    "label": "Default Location ID",
@@ -193,9 +212,8 @@
    "label": "Customers"
   },
   {
-   "default": "Individual",
    "depends_on": "eval:doc.enabled",
-   "description": "Customer Group applied when creating ERPNext Customers from Medusa.",
+   "description": "Customer Group applied when creating ERPNext Customers during order sync (Shopify / Ecommerce Core pattern).",
    "fieldname": "customer_group",
    "fieldtype": "Link",
    "label": "Customer Group",
@@ -203,11 +221,115 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Used when a Medusa order has no customer_id (edge cases). Prefer real Medusa customers when present.",
+   "description": "Fallback when a Medusa order has no customer_id (guest checkout). Customers are created only during order sync, matched by Medusa Customer ID (not email).",
    "fieldname": "default_customer",
    "fieldtype": "Link",
    "label": "Default Customer",
    "options": "Customer"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_orders",
+   "fieldtype": "Tab Break",
+   "label": "Orders"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Company used on Sales Orders created from Medusa.",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Naming series for Sales Orders created from Medusa (e.g. SO-MED-).",
+   "fieldname": "sales_order_series",
+   "fieldtype": "Select",
+   "label": "Sales Order Series"
+  },
+  {
+   "fieldname": "column_break_orders",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "When payment is captured, create Sales Invoice (and Payment Entry if Cash/Bank Account is set).",
+   "fieldname": "sync_sales_invoice",
+   "fieldtype": "Check",
+   "label": "Sync Sales Invoice on Payment"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_sales_invoice",
+   "fieldname": "sales_invoice_series",
+   "fieldtype": "Select",
+   "label": "Sales Invoice Series"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_sales_invoice",
+   "description": "Mode of Payment / bank account used for automatic Payment Entry against the Sales Invoice.",
+   "fieldname": "cash_bank_account",
+   "fieldtype": "Link",
+   "label": "Cash / Bank Account",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_order_taxes",
+   "fieldtype": "Section Break",
+   "label": "Taxes & Shipping"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Used when Medusa line items include tax_lines.",
+   "fieldname": "default_sales_tax_account",
+   "fieldtype": "Link",
+   "label": "Default Sales Tax Account",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Account for shipping charges when not added as an item.",
+   "fieldname": "default_shipping_charges_account",
+   "fieldtype": "Link",
+   "label": "Default Shipping Charges Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "column_break_order_tax",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Merge tax rows by account head (Shopify-style).",
+   "fieldname": "consolidate_taxes",
+   "fieldtype": "Check",
+   "label": "Consolidate Taxes"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Add shipping as a Sales Order line item instead of a tax/charge row.",
+   "fieldname": "add_shipping_as_item",
+   "fieldtype": "Check",
+   "label": "Add Shipping as Item"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.add_shipping_as_item",
+   "fieldname": "shipping_item",
+   "fieldtype": "Link",
+   "label": "Shipping Item",
+   "options": "Item",
+   "mandatory_depends_on": "eval:doc.add_shipping_as_item"
   },
   {
    "depends_on": "eval:doc.enabled",
@@ -217,14 +339,13 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Default warehouse for imported Items and inventory export.",
+   "description": "Default warehouse on Items created from Medusa product import (not used for multi-location inventory push).",
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Default Warehouse",
    "options": "Warehouse"
   },
   {
-   "default": "All Item Groups",
    "depends_on": "eval:doc.enabled",
    "fieldname": "item_group",
    "fieldtype": "Link",
@@ -232,7 +353,6 @@
    "options": "Item Group"
   },
   {
-   "default": "Nos",
    "depends_on": "eval:doc.enabled",
    "fieldname": "default_stock_uom",
    "fieldtype": "Link",
@@ -294,35 +414,6 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "fieldname": "section_inventory",
-   "fieldtype": "Section Break",
-   "label": "Inventory"
-  },
-  {
-   "default": "0",
-   "depends_on": "eval:doc.enabled",
-   "description": "Push ERPNext stock levels to Medusa inventory location levels (requires Default Location ID).",
-   "fieldname": "update_erpnext_stock_levels_to_medusa",
-   "fieldtype": "Check",
-   "label": "Update Stock Levels to Medusa"
-  },
-  {
-   "default": "15",
-   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
-   "fieldname": "inventory_sync_frequency",
-   "fieldtype": "Select",
-   "label": "Inventory Sync Frequency (Minutes)",
-   "options": "5\n10\n15\n30\n60"
-  },
-  {
-   "depends_on": "eval:doc.enabled",
-   "fieldname": "last_inventory_sync",
-   "fieldtype": "Datetime",
-   "label": "Last Inventory Sync",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.enabled",
    "fieldname": "section_product_status",
    "fieldtype": "Section Break",
    "label": "Product Sync Status"
@@ -340,6 +431,61 @@
    "fieldtype": "Small Text",
    "label": "Last Product Sync Message",
    "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_inventory",
+   "fieldtype": "Tab Break",
+   "label": "Inventory"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Push ERPNext Bin quantities to Medusa location levels (ERPNext is the stock master). Map each ERPNext warehouse to a Medusa stock location below. Open stock in ERPNext before enabling \u2014 enabling with zero stock can overwrite Medusa quantities with 0. Medusa Admin stock edits will be overwritten on the next sync.",
+   "fieldname": "update_erpnext_stock_levels_to_medusa",
+   "fieldtype": "Check",
+   "label": "Update Stock Levels to Medusa"
+  },
+  {
+   "default": "15",
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "fieldname": "inventory_sync_frequency",
+   "fieldtype": "Select",
+   "label": "Inventory Sync Frequency (Minutes)",
+   "options": "5\n10\n15\n30\n60"
+  },
+  {
+   "fieldname": "column_break_inv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_inventory_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Inventory Sync",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "fieldname": "section_warehouse_mapping",
+   "fieldtype": "Section Break",
+   "label": "Warehouse \u2194 Location Mapping"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "description": "Load stock locations from Medusa into the table, then link each row to an ERPNext warehouse.",
+   "fieldname": "fetch_medusa_locations",
+   "fieldtype": "Button",
+   "label": "Fetch Medusa Locations"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "description": "One-to-one map: ERPNext warehouse stock is pushed to the linked Medusa stock location. Enable only the rows you want to sync.",
+   "fieldname": "warehouse_mapping",
+   "fieldtype": "Table",
+   "label": "Warehouse Mapping",
+   "mandatory_depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "options": "Medusa Warehouse Mapping"
   },
   {
    "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
@@ -442,7 +588,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-13 23:08:20.516931",
+ "modified": "2026-07-14 12:24:32.665038",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Settings",

@@ -200,6 +200,21 @@ class MedusaClient:
 		)
 		return resp.get("webhook") or resp.get("subscription") or resp
 
+	def update_webhook(self, webhook_id: str, event_type: str, target_url: str, active: bool = True) -> dict:
+		"""Update an existing webhook subscription in place.
+
+		Used by webhook sync when event/target_url/active have drifted from the
+		desired configuration. Falls back to delete+create if the plugin rejects
+		the update (see WebhookSyncService._ensure_event).
+		"""
+		self._require_rest()
+		resp = self.execute_rest(
+			"POST",
+			f"{WEBHOOKS_PATH}/{webhook_id}",
+			json={"event_type": event_type, "target_url": target_url, "active": active},
+		)
+		return resp.get("webhook") or resp.get("subscription") or resp
+
 	def delete_webhook(self, webhook_id: str) -> None:
 		"""Delete a webhook subscription by its Medusa id."""
 		self._require_rest()

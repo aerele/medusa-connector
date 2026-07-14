@@ -39,19 +39,29 @@ class MedusaSettings(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		from medusa_connector.medusa_connector.doctype.medusa_warehouse_mapping.medusa_warehouse_mapping import (
+			MedusaWarehouseMapping,
+		)
 		from medusa_connector.medusa_connector.doctype.medusa_webhook_registration.medusa_webhook_registration import (
 			MedusaWebhookRegistration,
 		)
 
+		add_shipping_as_item: DF.Check
 		admin_api_key: DF.Password | None
+		cash_bank_account: DF.Link | None
+		company: DF.Link | None
 		connection_mode: DF.Literal["REST", "GraphQL"]
 		connection_status: DF.Literal["Unknown", "Disconnected", "Connected", "Auth Failed", "Error"]
+		consolidate_taxes: DF.Check
+		cost_center: DF.Link | None
 		customer_group: DF.Link | None
 		default_currency: DF.Data | None
 		default_customer: DF.Link | None
 		default_location_id: DF.Data | None
 		default_region_id: DF.Data | None
 		default_sales_channel_id: DF.Data | None
+		default_sales_tax_account: DF.Link | None
+		default_shipping_charges_account: DF.Link | None
 		default_stock_uom: DF.Link | None
 		enabled: DF.Check
 		graphql_url: DF.Data | None
@@ -69,13 +79,18 @@ class MedusaSettings(Document):
 		medusa_store_id: DF.Data | None
 		on_item_delete: DF.Literal["Draft", "Delete"]
 		price_list: DF.Link | None
+		sales_invoice_series: DF.Literal[None]
+		sales_order_series: DF.Literal[None]
+		shipping_item: DF.Link | None
 		sync_new_item_as_published: DF.Check
+		sync_sales_invoice: DF.Check
 		update_erpnext_stock_levels_to_medusa: DF.Check
 		update_medusa_item_on_update: DF.Check
 		upload_erpnext_items: DF.Check
 		upload_variants_as_items: DF.Check
 		verify_signatures: DF.Check
 		warehouse: DF.Link | None
+		warehouse_mapping: DF.Table[MedusaWarehouseMapping]
 		webhook_plugin_status: DF.Literal["Unknown", "Installed", "Not Installed", "Error"]
 		webhook_receiver_url: DF.SmallText | None
 		webhook_secret: DF.Password | None
@@ -91,8 +106,20 @@ class MedusaSettings(Document):
 			self._mark_disconnected()
 			return
 
+		# Shopify Setting.validate does the same when the integration is enabled:
+		# ensure Customer/Address identity custom fields exist (install/migrate also
+		# create them; this keeps saves self-healing if fields were removed).
+		from medusa_connector.setup import setup_custom_fields
+
+		setup_custom_fields(update=True)
+
+		# Connection first so store defaults can populate Default Location ID
+		# before inventory settings are validated.
 		if self._connection_settings_changed():
 			self._verify_connection()
+
+		self._seed_warehouse_mapping_if_needed()
+		self._validate_inventory_settings()
 
 	def on_update(self) -> None:
 		"""Enqueue webhook reconciliation after connection-relevant saves."""
@@ -108,6 +135,154 @@ class MedusaSettings(Document):
 				job_id="medusa-webhook-sync",
 				deduplicate=True,
 			)
+
+	# ------------------------------------------------------------------
+	# Warehouse ↔ Medusa location mapping (Shopify-style)
+	# ------------------------------------------------------------------
+
+	def get_erpnext_to_integration_wh_mapping(self) -> dict[str, str]:
+		"""Return ``{erpnext_warehouse: medusa_location_id}`` for enabled rows."""
+		return {
+			row.erpnext_warehouse: row.medusa_location_id
+			for row in self.warehouse_mapping or []
+			if row.enabled and row.erpnext_warehouse and row.medusa_location_id
+		}
+
+	def get_integration_to_erpnext_wh_mapping(self) -> dict[str, str]:
+		"""Return ``{medusa_location_id: erpnext_warehouse}`` for enabled rows."""
+		return {
+			row.medusa_location_id: row.erpnext_warehouse
+			for row in self.warehouse_mapping or []
+			if row.enabled and row.erpnext_warehouse and row.medusa_location_id
+		}
+
+	def get_erpnext_warehouses(self) -> list[str]:
+		return list(self.get_erpnext_to_integration_wh_mapping().keys())
+
+	@frappe.whitelist()
+	def fetch_medusa_locations(self) -> None:
+		"""Populate warehouse mapping from Medusa stock locations (Shopify pattern).
+
+		Preserves existing ERPNext warehouse links keyed by location id.
+		"""
+		frappe.only_for("System Manager")
+		if not self.enabled:
+			frappe.throw(frappe._("Enable the Medusa Connector first."))
+
+		from medusa_connector.medusa.client import MedusaClient
+		from medusa_connector.medusa.exceptions import MedusaAuthError, MedusaConnectionError
+
+		try:
+			client = MedusaClient(settings=self)
+			locations = _list_all_stock_locations(client)
+		except MedusaAuthError:
+			frappe.throw(
+				frappe._("Unable to authenticate with Medusa. Please verify the Admin API Key."),
+				title=frappe._("Authentication Failed"),
+			)
+		except MedusaConnectionError as exc:
+			frappe.throw(frappe._(str(exc)), title=frappe._("Connection Failed"))
+
+		if not locations:
+			frappe.msgprint(frappe._("No stock locations found on Medusa."), indicator="orange")
+			return
+
+		existing_wh = {
+			row.medusa_location_id: row.erpnext_warehouse
+			for row in self.warehouse_mapping or []
+			if row.medusa_location_id
+		}
+		existing_enabled = {
+			row.medusa_location_id: row.enabled
+			for row in self.warehouse_mapping or []
+			if row.medusa_location_id
+		}
+
+		self.set("warehouse_mapping", [])
+		for loc in locations:
+			loc_id = loc.get("id") or ""
+			if not loc_id:
+				continue
+			self.append(
+				"warehouse_mapping",
+				{
+					"medusa_location_id": loc_id,
+					"medusa_location_name": loc.get("name") or loc_id,
+					"erpnext_warehouse": existing_wh.get(loc_id) or "",
+					"enabled": existing_enabled.get(loc_id, 1 if existing_wh.get(loc_id) else 0),
+				},
+			)
+
+		# Do not save — leave the form dirty so the operator maps warehouses then saves
+		# (same pattern as Shopify Settings.update_location_table).
+		frappe.msgprint(
+			frappe._("Loaded {0} Medusa stock location(s). Map ERPNext warehouses and save.").format(
+				len(self.warehouse_mapping)
+			),
+			indicator="green",
+			alert=True,
+		)
+
+	def _seed_warehouse_mapping_if_needed(self) -> None:
+		"""If inventory is on and mapping is empty, seed from defaults (migration path)."""
+		if not self.update_erpnext_stock_levels_to_medusa:
+			return
+		if self.warehouse_mapping:
+			return
+		if self.warehouse and self.default_location_id:
+			self.append(
+				"warehouse_mapping",
+				{
+					"medusa_location_id": self.default_location_id,
+					"medusa_location_name": self.default_location_id,
+					"erpnext_warehouse": self.warehouse,
+					"enabled": 1,
+				},
+			)
+
+	def _validate_inventory_settings(self) -> None:
+		"""Require at least one valid warehouse↔location map when inventory push is on."""
+		if not self.update_erpnext_stock_levels_to_medusa:
+			return
+
+		mapping = self.get_erpnext_to_integration_wh_mapping()
+		if not mapping:
+			frappe.throw(
+				frappe._(
+					"Add at least one enabled Warehouse Mapping row (ERPNext Warehouse + Medusa Location ID). "
+					"Use Fetch Medusa Locations, then link each location to a warehouse."
+				),
+				title=frappe._("Inventory Sync"),
+			)
+
+		warehouses = list(mapping.keys())
+		locations = list(mapping.values())
+		if len(warehouses) != len(set(warehouses)):
+			frappe.throw(
+				frappe._("Each ERPNext Warehouse may appear only once in Warehouse Mapping."),
+				title=frappe._("Inventory Sync"),
+			)
+		if len(locations) != len(set(locations)):
+			frappe.throw(
+				frappe._("Each Medusa Location may appear only once in Warehouse Mapping."),
+				title=frappe._("Inventory Sync"),
+			)
+
+		for row in self.warehouse_mapping or []:
+			if not row.enabled:
+				continue
+			if not row.medusa_location_id:
+				frappe.throw(
+					frappe._("Medusa Location ID is required on enabled Warehouse Mapping rows."),
+					title=frappe._("Inventory Sync"),
+				)
+			if not row.erpnext_warehouse:
+				frappe.throw(
+					frappe._(
+						"ERPNext Warehouse is required on enabled Warehouse Mapping rows (location {0})."
+					).format(row.medusa_location_id),
+					title=frappe._("Inventory Sync"),
+				)
 
 	def _normalize_configured_urls(self) -> None:
 		if self.medusa_base_url:
@@ -197,6 +372,21 @@ class MedusaSettings(Document):
 		self.last_connection_message = frappe._("Connection successful ({0}).").format(client.mode)
 
 
+def _list_all_stock_locations(client) -> list[dict]:
+	"""Paginate ``GET /admin/stock-locations``."""
+	locations: list[dict] = []
+	offset, limit = 0, 100
+	while True:
+		resp = client.execute_rest("GET", "/admin/stock-locations", params={"limit": limit, "offset": offset})
+		page = (resp or {}).get("stock_locations") or []
+		locations.extend(page)
+		count = (resp or {}).get("count")
+		offset += limit
+		if not page or count is None or offset >= count:
+			break
+	return locations
+
+
 @frappe.whitelist()
 def sync_webhooks() -> dict:
 	"""Manually reconcile webhooks now (button on the settings form)."""
@@ -237,3 +427,11 @@ def refresh_store_defaults() -> dict:
 		"message": frappe._("Store defaults refreshed."),
 		"defaults": defaults,
 	}
+
+
+@frappe.whitelist()
+def sync_inventory_now() -> dict:
+	"""Desk button: force ERPNext → Medusa inventory push once."""
+	from medusa_connector.product.inventory_export import sync_inventory_now as _sync
+
+	return _sync()

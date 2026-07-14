@@ -4,15 +4,24 @@
 """Centralised inbound webhook receiver.
 
 Responsibilities are deliberately narrow and fast: authenticate the request,
-dedupe it, persist a Medusa Webhook Log row, and enqueue background processing.
-No business logic runs here — that lives in the dispatcher and handlers.
+dedupe it, persist an Ecommerce Integration Log row, and enqueue background
+processing. No business logic runs here — that lives in the dispatcher and handlers.
 """
+
+from __future__ import annotations
 
 import hashlib
 import hmac
 import json
 
 import frappe
+
+from medusa_connector.constants import MODULE_NAME
+from medusa_connector.utils.logging import (
+	create_medusa_log,
+	find_webhook_log_by_event_id,
+	webhook_message_key,
+)
 
 EVENT_ID_HEADER = "X-Medusa-Event-Id"
 DEFAULT_SIGNATURE_HEADER = "X-Medusa-Signature"
@@ -37,12 +46,17 @@ def receive() -> dict:
 
 	authentic = authenticate(settings, raw, headers)
 	if settings.verify_signatures and not authentic:
-		_log(
-			raw,
-			headers,
-			status="Rejected",
-			signature_valid=False,
-			error="Invalid or missing signature/token",
+		create_medusa_log(
+			status="Error",
+			method="medusa_connector.api.webhook.receive",
+			message="webhook:rejected",
+			request_data={
+				"headers": _safe_headers(headers),
+				"payload": _decode_raw(raw),
+				"signature_valid": False,
+			},
+			exception="Invalid or missing signature/token",
+			make_new=True,
 		)
 		frappe.local.response["http_status_code"] = 401
 		return {"status": "rejected"}
@@ -52,28 +66,28 @@ def receive() -> dict:
 	except (ValueError, TypeError):
 		body = {}
 
-	# The plugin's ``id`` is the affected resource id, not a unique webhook
-	# delivery id. Do not use it for deduplication: doing so would suppress every
-	# later update to the same product. Prefer an explicit delivery id/header and
-	# generate one when the plugin provides neither.
+	# Delivery id for at-least-once dedupe (not the resource id).
 	event_id = headers.get(EVENT_ID_HEADER) or body.get("event_id") or frappe.generate_hash(length=16)
-	# The Medusa webhooks plugin delivers ``{"id": "..."}`` only. The subscribed
-	# event is carried in the callback URL by WebhookSyncService.
 	event_name = (
 		body.get("event") or body.get("name") or body.get("event_name") or frappe.request.args.get("event")
 	)
 
-	# Idempotency: Medusa delivers at-least-once, so a repeat id is a no-op.
-	if event_id and frappe.db.exists("Medusa Webhook Log", {"event_id": event_id}):
+	if event_id and find_webhook_log_by_event_id(event_id):
 		return {"status": "duplicate", "event_id": event_id}
 
-	log = _log(
-		raw,
-		headers,
+	log = create_medusa_log(
 		status="Queued",
-		signature_valid=authentic,
-		event_id=event_id,
-		event_name=event_name,
+		method="medusa_connector.webhook.dispatch.dispatch_event",
+		message=webhook_message_key(event_id),
+		request_data={
+			"event_id": event_id,
+			"event_name": event_name,
+			"headers": _safe_headers(headers),
+			"payload": body if body else _decode_raw(raw),
+			"signature_valid": authentic,
+			"integration": MODULE_NAME,
+		},
+		make_new=True,
 	)
 
 	frappe.enqueue(
@@ -81,6 +95,7 @@ def receive() -> dict:
 		queue="short",
 		enqueue_after_commit=True,
 		log_name=log.name,
+		request_id=log.name,
 	)
 
 	return {"status": "accepted", "log": log.name}
@@ -92,12 +107,10 @@ def authenticate(settings, raw: bytes, headers: dict) -> bool:
 	if not secret:
 		return False
 
-	# Prefer HMAC when a signature header is present.
 	sent = _get_header(headers, _signature_header_name(settings))
 	if sent:
 		return _verify_hmac(secret, raw, sent)
 
-	# Plugin compatibility: target_url can only carry a query token, not a signature.
 	token = frappe.request.args.get("token") if frappe.request else None
 	if token:
 		return hmac.compare_digest(token, secret)
@@ -106,60 +119,42 @@ def authenticate(settings, raw: bytes, headers: dict) -> bool:
 
 
 def _signature_header_name(settings) -> str:
-	"""Header name for HMAC verification; configurable with a sensible default."""
 	name = (settings.get("webhook_signature_header") or "").strip()
 	return name or DEFAULT_SIGNATURE_HEADER
 
 
 def _get_header(headers: dict, name: str) -> str:
-	"""Return a request header value (case-insensitive), or empty string."""
 	if not name:
 		return ""
-
 	value = headers.get(name)
 	if value:
 		return str(value).strip()
-
 	lower = name.lower()
 	for key, value in headers.items():
 		if key.lower() == lower and value:
 			return str(value).strip()
-
 	return ""
 
 
 def _verify_hmac(secret: str, raw: bytes, sent: str) -> bool:
-	"""Verify HMAC-SHA256 of the raw body; expected encoding is hexadecimal only."""
 	expected_hex = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
 	if sent.startswith("sha256="):
 		sent = sent[len("sha256=") :]
 	return hmac.compare_digest(sent, expected_hex)
 
 
-def _log(
-	raw: bytes,
-	headers: dict,
-	status: str,
-	signature_valid: bool,
-	event_id: str | None = None,
-	event_name: str | None = None,
-	error: str | None = None,
-):
-	"""Create a Medusa Webhook Log row (guest context → ignore permissions)."""
-	body_text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
-	doc = frappe.get_doc(
-		{
-			"doctype": "Medusa Webhook Log",
-			"event_id": event_id,
-			"event_name": event_name,
-			"status": status,
-			"signature_valid": 1 if signature_valid else 0,
-			"source_ip": frappe.local.request_ip,
-			"request_headers": frappe.as_json(headers),
-			"payload": body_text,
-			"error": error,
-		}
-	)
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
-	return doc
+def _decode_raw(raw: bytes | str) -> str:
+	if isinstance(raw, bytes):
+		return raw.decode("utf-8", errors="replace")
+	return str(raw)
+
+
+def _safe_headers(headers: dict) -> dict:
+	"""Drop huge/binary values so the log stays readable."""
+	out = {}
+	for key, value in (headers or {}).items():
+		try:
+			out[str(key)] = str(value)[:500]
+		except Exception:
+			continue
+	return out

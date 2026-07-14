@@ -12,7 +12,7 @@ use_json_request_body = True
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext", "ecommerce_core"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -90,7 +90,7 @@ use_json_request_body = True
 # ------------
 
 # before_install = "medusa_connector.install.before_install"
-# after_install = "medusa_connector.install.after_install"
+after_install = "medusa_connector.setup.after_install"
 
 # Uninstallation
 # ------------
@@ -172,10 +172,6 @@ scheduler_events = {
 
 # Desk page client scripts are loaded automatically from page/ folders.
 # Keep log retention configurable.
-default_log_clearing_doctypes = {
-	"Medusa Webhook Log": 90,
-	"Medusa Sync Log": 90,
-}
 
 
 # Testing

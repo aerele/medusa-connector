@@ -22,11 +22,7 @@ class _PendingHandler(BaseHandler):
 		return f"{event.name}: {self.label} {event.entity_id} (sync pending)"
 
 
-@register("customer.created", "customer.updated", "customer.deleted")
-class CustomerHandler(_PendingHandler):
-	label = "customer"
-
-
+# customer.* is handled by customer.webhook (acknowledge-only; create at order sync).
 # inventory-item.* is handled by product.inventory_webhook (real sync).
 
 

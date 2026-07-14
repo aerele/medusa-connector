@@ -329,8 +329,8 @@ also accepts a real HMAC signature header.
 ## Verifying it works
 
 1. In Medusa, trigger an event (e.g. place a test order).
-2. In ERPNext, open the **Medusa Webhook Log** list — you should see a row move
-   `Queued → Processed`.
+2. In ERPNext, open **Ecommerce Integration Log** (filter Integration = Medusa Connector) —
+   you should see a row move `Queued → Success` (message like `webhook:{event_id}`).
 3. Failed events are retried automatically (every 10 minutes, up to 5 attempts).
 
 ---
@@ -341,5 +341,5 @@ also accepts a real HMAC signature header.
 |---|---|
 | **Webhook Plugin Status = Not Installed** | Plugin not installed/migrated on Medusa. Repeat Steps 1–4, restart Medusa, click Sync Webhooks. |
 | **Webhook Plugin Status = Error** | Base URL/API key wrong or Medusa unreachable. Fix connection, re-sync. |
-| **Log status = Rejected (401)** | Secret mismatch. Re-generate the Webhook Secret and click Sync Webhooks to re-register with the new token. |
-| **Log status = Failed** | Handler error; see the log's *Error* field. Auto-retried by the scheduler. |
+| **Log status = Error (401 / rejected)** | Secret mismatch. Re-generate the Webhook Secret and click Sync Webhooks to re-register with the new token. |
+| **Log status = Error** | Handler error; see the log's *Traceback* / *Response Data*. Auto-retried by the scheduler. |

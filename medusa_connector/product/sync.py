@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""Synchronise mapped Medusa products into ERPNext Items + Medusa Item Mapping.
+"""Synchronise mapped Medusa products into ERPNext Items + Ecommerce Item.
 
 Uses ERPNext's standard Item Variant APIs (``create_variant`` / ``get_variant``)
 and Medusa Admin product fields documented at https://docs.medusajs.com/api/admin.
@@ -14,8 +14,9 @@ from erpnext.controllers.item_variant import create_variant, get_variant
 from frappe.utils import cstr, flt, now_datetime
 from frappe.utils.nestedset import get_root_of
 
-from medusa_connector.constants import DEFAULT_ITEM_GROUP, DEFAULT_STOCK_UOM, SETTING_DOCTYPE
-from medusa_connector.medusa_connector.doctype.medusa_item_mapping.medusa_item_mapping import (
+from medusa_connector.constants import DEFAULT_ITEM_GROUP, DEFAULT_STOCK_UOM, MODULE_NAME, SETTING_DOCTYPE
+from medusa_connector.product.item_mapping import (
+	get_ecommerce_items_for_product,
 	get_erpnext_item,
 	mark_orphaned,
 	upsert_mapping,
@@ -41,14 +42,22 @@ class ProductSync:
 
 		with inbound_sync():
 			product_id = mapped_product["medusa_product_id"]
-			existing = get_erpnext_item(product_id, has_variants=mapped_product.get("has_variants") or 0)
+			has_variants = int(mapped_product.get("has_variants") or 0)
+			if has_variants:
+				existing = get_erpnext_item(product_id, has_variants=1)
+			else:
+				# Sellable rows are keyed by Variant ID (not Product ID).
+				existing = get_erpnext_item(
+					variant_id=mapped_product.get("medusa_variant_id"),
+					sku=mapped_product.get("sku"),
+				) or get_erpnext_item(product_id, has_variants=0)
 
 			self._ensure_stock_uom(mapped_product.get("stock_uom"))
 			self._sync_attributes(mapped_product.get("attributes") or [])
 			self._ensure_item_group(mapped_product)
 			self._ensure_brand(mapped_product.get("brand"))
 
-			if mapped_product.get("has_variants"):
+			if has_variants:
 				template_code, action = self._sync_template(mapped_product, existing)
 				variant_codes = []
 				for variant in mapped_product.get("variants") or []:
@@ -73,55 +82,29 @@ class ProductSync:
 
 	def disable_product(self, product_id: str) -> str | None:
 		"""Disable ERPNext items linked to a deleted Medusa product."""
-		template = get_erpnext_item(product_id, has_variants=1)
-		simple = get_erpnext_item(product_id, has_variants=0)
 		disabled: list[str] = []
+		maps = get_ecommerce_items_for_product(product_id)
+		# Disable sellables first, then template.
+		maps = sorted(maps, key=lambda r: int(r.get("has_variants") or 0))
 
-		for item in filter(None, [template, simple]):
-			if not item.disabled:
-				item.disabled = 1
-				self._save_item(item)
-			disabled.append(item.name)
-			mark_orphaned(product_id)
-			variant_maps = frappe.get_all(
-				"Medusa Item Mapping",
-				filters={"medusa_product_id": product_id, "has_variants": 0, "variant_of": item.name},
-				fields=["erpnext_item_code", "medusa_variant_id"],
-			)
-			for row in variant_maps:
-				if frappe.db.exists("Item", row.erpnext_item_code):
-					v = frappe.get_doc("Item", row.erpnext_item_code)
-					if not v.disabled:
-						v.disabled = 1
-						self._save_item(v)
-				mark_orphaned(product_id, row.medusa_variant_id)
-				disabled.append(row.erpnext_item_code)
-
-		if not disabled:
-			maps = frappe.get_all(
-				"Medusa Item Mapping",
-				filters={"medusa_product_id": product_id},
-				fields=["erpnext_item_code", "medusa_variant_id"],
-			)
-			for row in maps:
-				if frappe.db.exists("Item", row.erpnext_item_code):
-					item = frappe.get_doc("Item", row.erpnext_item_code)
-					if not item.disabled:
-						item.disabled = 1
-						self._save_item(item)
-					disabled.append(item.name)
-				mark_orphaned(product_id, row.medusa_variant_id)
+		for row in maps:
+			code = row.erpnext_item_code
+			if code and frappe.db.exists("Item", code):
+				item = frappe.get_doc("Item", code)
+				if not item.disabled:
+					item.disabled = 1
+					self._save_item(item)
+				if code not in disabled:
+					disabled.append(code)
+			mark_orphaned(product_id, row.variant_id or None)
 
 		return disabled[0] if disabled else None
 
 	def _delete_product_items(self, product_id: str) -> str | None:
-		"""Hard-delete mapped Items (best-effort) and mark mappings orphaned."""
-		maps = frappe.get_all(
-			"Medusa Item Mapping",
-			filters={"medusa_product_id": product_id},
-			fields=["name", "erpnext_item_code", "medusa_variant_id", "has_variants"],
-			order_by="has_variants asc",  # delete variants before templates
-		)
+		"""Hard-delete mapped Items (best-effort)."""
+		maps = get_ecommerce_items_for_product(product_id)
+		# Delete variants (has_variants=0) before templates.
+		maps = sorted(maps, key=lambda r: int(r.get("has_variants") or 0))
 		last = None
 		for row in maps:
 			if row.erpnext_item_code and frappe.db.exists("Item", row.erpnext_item_code):
@@ -134,7 +117,7 @@ class ProductSync:
 					item.disabled = 1
 					self._save_item(item)
 					last = item.name
-			mark_orphaned(product_id, row.medusa_variant_id or None)
+			mark_orphaned(product_id, row.variant_id or None)
 		return last
 
 	# ------------------------------------------------------------------
@@ -318,22 +301,16 @@ class ProductSync:
 		self._sync_item_price(item.name, mapped)
 
 		variant_id = mapped.get("medusa_variant_id")
-		mapping_name = upsert_mapping(
+		if not variant_id:
+			frappe.throw(f"Medusa product {product_id} has no default variant id; cannot map sellable item.")
+		upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,
 			variant_id=variant_id,
-			sku=mapped.get("sku"),
+			sku=mapped.get("sku") or item.name,
 			has_variants=0,
 			status="Disabled" if item.disabled else "Active",
 		)
-		if mapped.get("medusa_inventory_item_id"):
-			frappe.db.set_value(
-				"Medusa Item Mapping",
-				mapping_name,
-				"medusa_inventory_item_id",
-				mapped["medusa_inventory_item_id"],
-				update_modified=False,
-			)
 		return item.name, action
 
 	def _sync_variant(self, template_code: str, product_id: str, variant: dict, *, force: bool) -> str | None:
@@ -341,8 +318,11 @@ class ProductSync:
 		attrs = variant.get("attributes") or {}
 		if not attrs:
 			return None
+		if not variant_id:
+			return None
 
-		mapped_item = get_erpnext_item(product_id, variant_id=variant_id, sku=variant.get("sku"))
+		# Lookup by Variant ID / SKU (integration_item_code is the Variant ID).
+		mapped_item = get_erpnext_item(variant_id=variant_id, sku=variant.get("sku"))
 		if mapped_item:
 			self._update_variant_item(mapped_item, variant)
 			self._finish_variant_mapping(mapped_item, product_id, variant, template_code)
@@ -368,23 +348,15 @@ class ProductSync:
 		return variant_doc.name
 
 	def _finish_variant_mapping(self, item, product_id: str, variant: dict, template_code: str) -> None:
-		mapping_name = upsert_mapping(
+		upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,
 			variant_id=variant.get("medusa_variant_id"),
-			sku=variant.get("sku"),
+			sku=variant.get("sku") or item.name,
 			variant_of=template_code,
 			has_variants=0,
 			status="Disabled" if item.disabled else "Active",
 		)
-		if variant.get("medusa_inventory_item_id"):
-			frappe.db.set_value(
-				"Medusa Item Mapping",
-				mapping_name,
-				"medusa_inventory_item_id",
-				variant["medusa_inventory_item_id"],
-				update_modified=False,
-			)
 
 	def _update_variant_item(self, item, variant: dict) -> None:
 		before = item.as_dict()
@@ -862,20 +834,74 @@ class ProductSync:
 
 	@staticmethod
 	def _save_item(item) -> None:
-		"""Persist Item like Shopify ``create_ecommerce_item``."""
-		item.flags.from_medusa = True
-		item.flags.from_integration = True
-		item.flags.ignore_mandatory = True
-		item.flags.ignore_version = True
-		item.flags.dont_update_variants = True
+		"""Persist Item for inbound Medusa sync.
+
+		Handles concurrent writers (parallel webhooks / inventory field sync) that
+		would otherwise raise ``TimestampMismatchError``. Frappe's
+		``set_user_and_timestamp`` snapshots ``self.modified`` into
+		``_original_modified`` immediately before ``check_if_latest``, so we always
+		refresh ``modified`` from the DB right before ``save``. On a remaining race,
+		reload the latest row, re-apply our field values, and retry.
+		"""
+		ProductSync._set_item_save_flags(item)
 
 		is_new = item.is_new() or not item.name or not frappe.db.exists(item.doctype, item.name)
 		if is_new:
 			item.insert(ignore_permissions=True, ignore_mandatory=True)
 			return
 
-		db_modified = frappe.db.get_value(item.doctype, item.name, "modified")
-		if db_modified:
-			item._original_modified = db_modified
-			item.modified = db_modified
-		item.save(ignore_permissions=True)
+		max_attempts = 3
+		last_exc: Exception | None = None
+		for attempt in range(max_attempts):
+			try:
+				# set_user_and_timestamp copies self.modified → _original_modified.
+				db_modified = frappe.db.get_value(item.doctype, item.name, "modified")
+				if db_modified:
+					item.modified = db_modified
+				item.save(ignore_permissions=True)
+				return
+			except frappe.TimestampMismatchError as exc:
+				last_exc = exc
+				if attempt + 1 >= max_attempts:
+					break
+				# Another job updated the Item between load and save — merge into latest.
+				prepared = item.as_dict()
+				item = frappe.get_doc(item.doctype, item.name)
+				ProductSync._merge_prepared_item_fields(item, prepared)
+				ProductSync._set_item_save_flags(item)
+
+		if last_exc:
+			raise last_exc
+
+	@staticmethod
+	def _set_item_save_flags(item) -> None:
+		item.flags.from_medusa = True
+		item.flags.from_integration = True
+		item.flags.ignore_mandatory = True
+		item.flags.ignore_version = True
+		item.flags.dont_update_variants = True
+
+	@staticmethod
+	def _merge_prepared_item_fields(target, prepared: dict) -> None:
+		"""Copy inbound field values onto a freshly loaded Item for save retry."""
+		skip = {
+			"name",
+			"owner",
+			"creation",
+			"modified",
+			"modified_by",
+			"docstatus",
+			"idx",
+			"doctype",
+			"parent",
+			"parenttype",
+			"parentfield",
+		}
+		for key, value in prepared.items():
+			if not key or key.startswith("_") or key in skip:
+				continue
+			try:
+				target.set(key, value)
+			except Exception:
+				# Skip read-only / virtual fields that cannot be set on the target.
+				pass

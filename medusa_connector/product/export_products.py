@@ -27,15 +27,14 @@ from __future__ import annotations
 import frappe
 from frappe.utils import cint, flt, get_url, strip_html
 
-from medusa_connector.constants import SETTING_DOCTYPE
+from medusa_connector.constants import MODULE_NAME, SETTING_DOCTYPE
 from medusa_connector.medusa.product import ProductService
-from medusa_connector.medusa_connector.doctype.medusa_item_mapping.medusa_item_mapping import (
+from medusa_connector.product.item_mapping import (
+	get_medusa_product_id_from_row,
+	get_medusa_variant_id,
 	upsert_mapping,
 )
-from medusa_connector.medusa_connector.doctype.medusa_sync_log.medusa_sync_log import (
-	create_sync_log,
-	update_sync_log,
-)
+from medusa_connector.utils.logging import create_sync_log, update_sync_log
 from medusa_connector.utils.store_defaults import get_store_defaults
 
 DEFAULT_OPTION_TITLE = "Default option"
@@ -95,41 +94,42 @@ def archive_erpnext_item(doc, method: str | None = None) -> None:
 		return
 
 	row = frappe.db.get_value(
-		"Medusa Item Mapping",
-		{"erpnext_item_code": doc.name},
-		["name", "medusa_product_id", "medusa_variant_id", "has_variants", "variant_of"],
+		"Ecommerce Item",
+		{"integration": MODULE_NAME, "erpnext_item_code": doc.name},
+		["name", "integration_item_code", "variant_id", "has_variants", "variant_of"],
 		as_dict=True,
 	)
-	if not row or not row.medusa_product_id:
+	if not row or not row.integration_item_code:
 		return
 
 	service = ProductService()
 	action = settings.get("on_item_delete") or "Draft"
+	variant_id = get_medusa_variant_id(row)
+	product_id = get_medusa_product_id_from_row(row, fetch_if_missing=True)
 	try:
-		if row.variant_of and row.medusa_variant_id and not cint(row.has_variants):
-			# Leaf variant: remove only the Medusa variant when possible.
+		# Multi-variant sellable leaf: only touch the Medusa variant.
+		if row.variant_of and variant_id and not cint(row.has_variants) and product_id:
 			if action == "Delete":
-				service.delete_variant(row.medusa_product_id, row.medusa_variant_id)
+				service.delete_variant(product_id, variant_id)
 			else:
 				service.update_variant(
-					row.medusa_product_id,
-					row.medusa_variant_id,
+					product_id,
+					variant_id,
 					{"metadata": {"erpnext_status": "deleted"}},
 				)
-			frappe.db.set_value("Medusa Item Mapping", row.name, "status", "Orphaned")
 			return
 
+		# Simple product (or template): draft/delete the Medusa product.
+		if not product_id:
+			product_id = row.integration_item_code if cint(row.has_variants) else None
+			if not product_id and variant_id:
+				product_id = get_medusa_product_id_from_row(row, fetch_if_missing=True)
+		if not product_id:
+			return
 		if action == "Delete":
-			service.delete_product(row.medusa_product_id)
+			service.delete_product(product_id)
 		else:
-			service.update_product(row.medusa_product_id, {"status": "draft"})
-		frappe.db.set_value(
-			"Medusa Item Mapping",
-			{"medusa_product_id": row.medusa_product_id},
-			"status",
-			"Orphaned",
-			update_modified=False,
-		)
+			service.update_product(product_id, {"status": "draft"})
 	except Exception:
 		frappe.log_error(
 			title=f"Medusa archive failed for Item {doc.name}",
@@ -138,7 +138,9 @@ def archive_erpnext_item(doc, method: str | None = None) -> None:
 
 
 def _mapping_exists_for_item(item_code: str) -> bool:
-	return bool(frappe.db.exists("Medusa Item Mapping", {"erpnext_item_code": item_code}))
+	return bool(
+		frappe.db.exists("Ecommerce Item", {"integration": MODULE_NAME, "erpnext_item_code": item_code})
+	)
 
 
 def _create_medusa_product(item, settings) -> None:
@@ -149,13 +151,13 @@ def _create_medusa_product(item, settings) -> None:
 	# Multi-variant: if the template already maps to a Medusa product, add a variant.
 	if item.variant_of:
 		template_map = frappe.db.get_value(
-			"Medusa Item Mapping",
-			{"erpnext_item_code": template.name, "has_variants": 1},
-			["medusa_product_id"],
+			"Ecommerce Item",
+			{"integration": MODULE_NAME, "erpnext_item_code": template.name, "has_variants": 1},
+			["integration_item_code"],
 			as_dict=True,
 		)
-		if template_map and template_map.medusa_product_id:
-			_add_variant_to_product(item, template, template_map.medusa_product_id, settings, service)
+		if template_map and template_map.integration_item_code:
+			_add_variant_to_product(item, template, template_map.integration_item_code, settings, service)
 			return
 
 	payload = _build_create_payload(item, template, settings, service)
@@ -258,9 +260,9 @@ def _add_variant_to_product(item, template, product_id: str, settings, service: 
 
 def _update_medusa_product(item, settings) -> None:
 	row = frappe.db.get_value(
-		"Medusa Item Mapping",
-		{"erpnext_item_code": item.name},
-		["name", "medusa_product_id", "medusa_variant_id", "variant_of", "has_variants"],
+		"Ecommerce Item",
+		{"integration": MODULE_NAME, "erpnext_item_code": item.name},
+		["name", "integration_item_code", "variant_id", "variant_of", "has_variants"],
 		as_dict=True,
 	)
 	if not row:
@@ -269,44 +271,56 @@ def _update_medusa_product(item, settings) -> None:
 	service = ProductService()
 	template = frappe.get_doc("Item", item.variant_of) if item.variant_of else item
 	product_payload = _build_update_product_payload(template if item.variant_of else item, settings)
+	product_id = get_medusa_product_id_from_row(row, fetch_if_missing=True)
+	variant_id = get_medusa_variant_id(row)
+
+	if not product_id:
+		frappe.throw(f"Cannot resolve Medusa product id for Item {item.name}")
 
 	log_name = create_sync_log(
 		sync_type="Product Export",
 		status="Running",
 		method="medusa_connector.product.export_products.upload_erpnext_item",
 		message=f"Updating Item {item.name}",
-		request_data={"product": product_payload, "item": item.name},
+		request_data={"product": product_payload, "item": item.name, "product_id": product_id},
 	)
 	try:
-		updated = service.update_product(row.medusa_product_id, product_payload)
+		updated = service.update_product(product_id, product_payload)
 
 		# Update the sellable variant (simple item or ERPNext variant).
 		if not cint(row.has_variants):
-			variant_id = row.medusa_variant_id
 			if not variant_id:
-				product = service.get_product(row.medusa_product_id)
+				product = service.get_product(product_id)
 				variant_id = _match_variant_id(product, item)
 			if variant_id:
 				variant_payload = _variant_update_payload(item, template, settings=settings)
-				service.update_variant(row.medusa_product_id, variant_id, variant_payload)
-				row.medusa_variant_id = variant_id
+				service.update_variant(product_id, variant_id, variant_payload)
 
 		from medusa_connector.utils.sync_guard import mark_product_exported
 
-		mark_product_exported(row.medusa_product_id)
-		upsert_mapping(
-			erpnext_item_code=item.name,
-			medusa_product_id=row.medusa_product_id,
-			variant_id=row.medusa_variant_id if not cint(row.has_variants) else None,
-			variant_of=row.variant_of,
-			sku=item.name if not cint(row.has_variants) else None,
-			has_variants=cint(row.has_variants),
-			status="Disabled" if item.disabled else "Active",
-		)
+		mark_product_exported(product_id)
+		if cint(row.has_variants):
+			upsert_mapping(
+				erpnext_item_code=item.name,
+				medusa_product_id=product_id,
+				has_variants=1,
+				status="Disabled" if item.disabled else "Active",
+			)
+		else:
+			upsert_mapping(
+				erpnext_item_code=item.name,
+				medusa_product_id=product_id,
+				variant_id=variant_id,
+				variant_of=row.variant_of or (item.variant_of or None),
+				sku=item.name,
+				has_variants=0,
+				status="Disabled" if item.disabled else "Active",
+			)
 		update_sync_log(
 			log_name,
 			status="Success",
-			message=f"Updated {item.name} → {row.medusa_product_id}",
+			message=f"Updated {item.name} → product {product_id}"
+			+ (f" variant {variant_id}" if variant_id else ""),
 			updated=1,
 			response_data=updated,
 			complete=True,
@@ -398,6 +412,7 @@ def _build_update_product_payload(item_or_template, settings) -> dict:
 
 
 def _write_create_mappings(item, template, created: dict) -> None:
+	"""Persist Ecommerce Item rows: sellables keyed by Variant ID; template by Product ID."""
 	product_id = created.get("id")
 	if item.variant_of:
 		upsert_mapping(
@@ -406,6 +421,8 @@ def _write_create_mappings(item, template, created: dict) -> None:
 			has_variants=1,
 		)
 		variant_id = _match_variant_id(created, item)
+		if not variant_id:
+			frappe.throw(f"Medusa product {product_id} has no matching variant for Item {item.name}")
 		upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,
@@ -415,10 +432,10 @@ def _write_create_mappings(item, template, created: dict) -> None:
 			has_variants=0,
 		)
 	else:
-		variant_id = None
 		variants = created.get("variants") or []
-		if variants:
-			variant_id = variants[0].get("id")
+		variant_id = variants[0].get("id") if variants else None
+		if not variant_id:
+			frappe.throw(f"Medusa product {product_id} has no default variant for Item {item.name}")
 		upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,

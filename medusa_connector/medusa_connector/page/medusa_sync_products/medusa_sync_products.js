@@ -32,8 +32,67 @@ class ProductSyncPage {
 	}
 
 	addMarkup() {
+		// Fill the desk viewport (navbar + page head) so the table can grow.
+		this.wrapper.addClass("medusa-sync-page-host");
+		this.wrapper
+			.closest(".layout-main-section-wrapper")
+			.addClass("medusa-sync-page-host-wrap");
+
 		this.wrapper.append(`
 			<style>
+				/* Viewport-filling shell under desk navbar + page head */
+				.medusa-sync-page-host-wrap {
+					--medusa-sync-page-height: calc(
+						100vh - var(--navbar-height, 48px) - var(--page-head-height, 48px) - 16px
+					);
+					display: flex;
+					flex-direction: column;
+					height: var(--medusa-sync-page-height);
+					min-height: var(--medusa-sync-page-height);
+					max-height: var(--medusa-sync-page-height);
+					margin-bottom: 0 !important;
+					padding-bottom: 0 !important;
+					overflow: hidden;
+				}
+				.medusa-sync-page-host {
+					display: flex;
+					flex-direction: column;
+					flex: 1 1 auto;
+					min-height: 0;
+					height: 100%;
+					padding-bottom: 0 !important;
+					margin-bottom: 0 !important;
+					overflow: hidden;
+				}
+				.medusa-sync-page {
+					display: flex;
+					flex: 1 1 auto;
+					min-height: 0;
+					height: 100%;
+					margin-left: 0;
+					margin-right: 0;
+					margin-bottom: 0;
+					overflow: hidden;
+				}
+				.medusa-sync-page > [class*="col-"] {
+					display: flex;
+					flex-direction: column;
+					min-height: 0;
+				}
+				.medusa-sync-page .medusa-products-card {
+					display: flex;
+					flex-direction: column;
+					flex: 1 1 auto;
+					min-height: 0;
+					height: 100%;
+					margin-bottom: 0 !important;
+				}
+				.medusa-sync-page .medusa-products-card-header {
+					flex: 0 0 auto;
+				}
+				.medusa-sync-page .medusa-datatable-footer {
+					flex: 0 0 auto;
+				}
 				.medusa-sync-page .medusa-toolbar {
 					display: flex;
 					align-items: center;
@@ -56,8 +115,45 @@ class ProductSyncPage {
 					margin: 0;
 					line-height: 1.2;
 				}
+				/* Table area expands; body scrolls inside remaining height */
+				.medusa-sync-page #medusa-product-list {
+					width: 100%;
+					max-width: 100%;
+					flex: 1 1 auto;
+					min-height: 200px;
+					overflow: hidden;
+					display: flex;
+					flex-direction: column;
+				}
+				.medusa-sync-page #medusa-product-list .datatable {
+					width: 100%;
+					max-width: 100%;
+					flex: 1 1 auto;
+					min-height: 0;
+					height: 100%;
+					display: flex;
+					flex-direction: column;
+				}
+				.medusa-sync-page #medusa-product-list .dt-header {
+					flex: 0 0 auto;
+				}
+				.medusa-sync-page #medusa-product-list .dt-scrollable {
+					flex: 1 1 auto;
+					overflow-x: auto !important;
+					overflow-y: auto !important;
+					/* Override DataTable default 40vw / max-height caps */
+					height: 100% !important;
+					max-height: none !important;
+					min-height: 160px;
+				}
+				.medusa-sync-page #medusa-product-list .dt-row {
+					min-width: max-content;
+				}
 				.medusa-sync-page .dt-cell__content {
 					align-items: center;
+					white-space: nowrap;
+					overflow: hidden;
+					text-overflow: ellipsis;
 				}
 				.medusa-sync-page .product-count > div {
 					display: flex;
@@ -70,11 +166,29 @@ class ProductSyncPage {
 					align-items: center;
 					justify-content: center;
 				}
+				.medusa-sync-page .medusa-side-col {
+					gap: 12px;
+				}
+				.medusa-sync-page #sync-log-card {
+					flex: 1 1 auto;
+					min-height: 0;
+					display: none;
+					flex-direction: column;
+					margin-bottom: 0 !important;
+				}
+				.medusa-sync-page #sync-log-card.is-visible {
+					display: flex !important;
+				}
+				.medusa-sync-page #medusa-sync-log {
+					flex: 1 1 auto;
+					min-height: 120px;
+					max-height: none;
+				}
 			</style>
 			<div class="row medusa-sync-page">
-				<div class="col-lg-8 d-flex align-items-stretch">
-					<div class="card border-0 shadow-sm p-3 mb-3 w-100 rounded-sm" style="background-color: var(--card-bg)">
-						<div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2 flex-wrap" style="gap: 8px;">
+				<div class="col-lg-8 d-flex flex-column">
+					<div class="card border-0 shadow-sm p-3 w-100 rounded-sm medusa-products-card" style="background-color: var(--card-bg)">
+						<div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2 flex-wrap medusa-products-card-header" style="gap: 8px;">
 							<h5 class="mb-0">${__("Products in Medusa")}</h5>
 							<div class="medusa-toolbar">
 								<input type="text" class="form-control form-control-sm" id="medusa-product-q"
@@ -100,8 +214,8 @@ class ProductSyncPage {
 						</div>
 					</div>
 				</div>
-				<div class="col-lg-4">
-					<div class="card border-0 shadow-sm p-3 mb-3 rounded-sm" style="background-color: var(--card-bg)">
+				<div class="col-lg-4 d-flex flex-column medusa-side-col">
+					<div class="card border-0 shadow-sm p-3 rounded-sm" style="background-color: var(--card-bg)">
 						<h5 class="border-bottom pb-2 mb-3">${__("Synchronization")}</h5>
 						<button type="button" id="btn-sync-all" class="btn btn-primary w-100 font-weight-bold py-2 mb-3">
 							${__("Sync All Products")}
@@ -122,18 +236,64 @@ class ProductSyncPage {
 						</div>
 					</div>
 
-					<div class="card border-0 shadow-sm p-3 mb-3 rounded-sm" style="background-color: var(--card-bg); display:none;" id="sync-log-card">
+					<div class="card border-0 shadow-sm p-3 rounded-sm" style="background-color: var(--card-bg);" id="sync-log-card">
 						<h5 class="border-bottom pb-2">${__("Sync Progress")}</h5>
 						<div class="progress mb-2" style="height: 8px;">
 							<div class="progress-bar progress-bar-striped progress-bar-animated" id="sync-progress-bar"
 								role="progressbar" style="width: 100%"></div>
 						</div>
 						<div class="control-value like-disabled-input for-description overflow-auto"
-							id="medusa-sync-log" style="max-height: 360px;"></div>
+							id="medusa-sync-log"></div>
 					</div>
 				</div>
 			</div>
 		`);
+
+		// Keep sync-log card hidden until a bulk sync starts (class toggled in logSync).
+		this.wrapper.find("#sync-log-card").hide();
+
+		if (!this._boundResize) {
+			this._boundResize = frappe.utils.debounce(() => this.fitTableHeight(), 100);
+			$(window).on("resize.medusa-sync-products", this._boundResize);
+		}
+	}
+
+	/**
+	 * Size DataTable body to the remaining height inside the products card
+	 * (header + pagination stay fixed; body scrolls).
+	 */
+	fitTableHeight() {
+		const $list = this.wrapper.find("#medusa-product-list");
+		const $scrollable = $list.find(".dt-scrollable");
+		if (!$list.length || !$scrollable.length) {
+			return;
+		}
+		const listEl = $list[0];
+		const headerEl = $list.find(".dt-header")[0];
+		const headerH = headerEl ? headerEl.offsetHeight : 0;
+		// Prefer measured free space in the flex host; fall back to viewport math.
+		let available = listEl.clientHeight - headerH;
+		if (available < 160) {
+			const card = this.wrapper.find(".medusa-products-card")[0];
+			const cardHeader = this.wrapper.find(".medusa-products-card-header")[0];
+			const footer = this.wrapper.find(".medusa-datatable-footer")[0];
+			const cardPad = 24; // p-3 top+bottom approx
+			const used =
+				(cardHeader ? cardHeader.offsetHeight : 0) +
+				(footer && footer.offsetParent ? footer.offsetHeight : 0) +
+				headerH +
+				cardPad +
+				16;
+			const hostTop = card ? card.getBoundingClientRect().top : 80;
+			available = Math.max(160, window.innerHeight - hostTop - used);
+		}
+		const el = $scrollable[0];
+		// !important so DataTable's setBodyStyle cannot collapse the body
+		// when there are fewer rows than the available viewport.
+		el.style.setProperty("height", `${available}px`, "important");
+		el.style.setProperty("max-height", `${available}px`, "important");
+		el.style.setProperty("overflow-y", "auto", "important");
+		el.style.setProperty("overflow-x", "auto", "important");
 	}
 
 	bindActions() {
@@ -219,47 +379,80 @@ class ProductSyncPage {
 							p.id
 					  }">${__("Sync")}</button></div>`,
 			}));
+			// Explicit widths + layout "fixed" so columns stay readable and the
+			// table scrolls horizontally when total width exceeds the card.
 			const columns = [
 				{
 					name: __("S.No"),
 					editable: false,
 					focusable: false,
 					align: "center",
-					width: 60,
+					width: 70,
 				},
-				{ name: __("Medusa Product ID"), editable: false, focusable: false },
-				{ name: __("Product Name"), editable: false, focusable: false },
-				{ name: __("SKU"), editable: false, focusable: false },
+				{
+					name: __("Medusa Product ID"),
+					editable: false,
+					focusable: false,
+					width: 300,
+				},
+				{
+					name: __("Product Name"),
+					editable: false,
+					focusable: false,
+					width: 180,
+				},
+				{
+					name: __("SKU"),
+					editable: false,
+					focusable: false,
+					width: 220,
+				},
 				{
 					name: __("Medusa Status"),
 					editable: false,
 					focusable: false,
 					align: "center",
+					width: 140,
 				},
 				{
 					name: __("ERPNext Sync Status"),
 					editable: false,
 					focusable: false,
 					align: "center",
+					width: 160,
 				},
 				{
 					name: __("Actions"),
 					editable: false,
 					focusable: false,
 					align: "center",
-					width: 100,
+					width: 120,
 				},
 			];
 			list.empty();
+			if (this.table && typeof this.table.destroy === "function") {
+				try {
+					this.table.destroy();
+				} catch (e) {
+					/* ignore stale instance */
+				}
+				this.table = null;
+			}
 			this.table = new frappe.DataTable(list[0], {
 				columns,
 				data: rows,
-				layout: "fluid",
+				layout: "fixed",
 				serialNoColumn: false,
+				checkboxColumn: false,
+				inlineFilters: false,
+				noDataMessage: __("No products found"),
 			});
 			this.wrapper.find(".medusa-datatable-footer").show();
 			this.wrapper.find(".btn-prev").prop("disabled", this.prevOffset == null);
 			this.wrapper.find(".btn-next").prop("disabled", this.nextOffset == null);
+			// After DataTable paints, expand body into remaining viewport height.
+			requestAnimationFrame(() => this.fitTableHeight());
+			setTimeout(() => this.fitTableHeight(), 50);
 		} catch (e) {
 			list.html(
 				`<div class="text-danger py-3">${__(
@@ -340,9 +533,10 @@ class ProductSyncPage {
 	logSync() {
 		const $card = this.wrapper.find("#sync-log-card");
 		const $log = this.wrapper.find("#medusa-sync-log");
-		$card.show();
+		$card.addClass("is-visible").show();
 		$log.html("");
 		this.syncRunning = true;
+		requestAnimationFrame(() => this.fitTableHeight());
 
 		frappe.realtime.on("medusa.key.sync.products", (payload) => {
 			const { message, synced, done } = payload || {};

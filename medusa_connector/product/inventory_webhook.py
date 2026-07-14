@@ -1,23 +1,10 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""Inventory Item webhooks (Medusa Inventory module → ERPNext Item).
+"""Inventory Item webhooks (Medusa Inventory module → ERPNext Item fields).
 
-Medusa Admin Inventory UI (``/app/inventory``) edits the Inventory Item model
-(``hs_code``, dimensions, material, origin_country, mid_code, sku, …), not the
-Product catalog fields.
-
-Medusa Inventory *module* emits namespaced events
-(``inventory.inventory-item.updated``). The Medusa forwarder maps those to the
-connector short names used for webhook subscriptions:
-
-* ``inventory-item.created``
-* ``inventory-item.updated``
-* ``inventory-item.deleted``
-
-Payload is typically ``{"id": "iitem_…"}``. We fetch the full Inventory Item
-via Admin API, resolve linked Product Variants / ERPNext mappings, and apply
-inventory fields onto the matching Item(s).
+Qty is **not** written here — ERPNext is stock master. This only maps inventory
+item attributes onto ERPNext Items via Ecommerce Item (variant/SKU).
 """
 
 from __future__ import annotations
@@ -25,7 +12,9 @@ from __future__ import annotations
 import time
 
 import frappe
+from frappe.utils import cstr
 
+from medusa_connector.constants import MODULE_NAME
 from medusa_connector.medusa.inventory import InventoryService
 from medusa_connector.medusa.product import ProductService
 from medusa_connector.product.mapper import ProductMapper
@@ -58,7 +47,7 @@ class InventoryItemHandler(BaseHandler):
 			return f"{event.name}: missing inventory item id"
 
 		if event.name == "inventory-item.deleted":
-			return self._handle_delete(inventory_item_id)
+			return f"inventory-item.deleted: {inventory_item_id} (no ERP qty change)"
 
 		inv = self._fetch_inventory_item(inventory_item_id)
 		if not inv or not inv.get("id"):
@@ -66,14 +55,11 @@ class InventoryItemHandler(BaseHandler):
 
 		item_codes = self._resolve_erpnext_item_codes(inv)
 		if not item_codes:
-			# Try full product re-sync when we can discover product_id (creates mapping).
 			product_ids = self._product_ids_from_inventory(inv)
-			synced = []
 			for product_id in product_ids:
-				synced.append(self._resync_product(product_id))
-				# Re-resolve after product sync (mapping should now hold inventory id).
+				self._resync_product(product_id)
 			item_codes = self._resolve_erpnext_item_codes(inv)
-			if not item_codes and not synced:
+			if not item_codes:
 				return (
 					f"{event.name}: no ERPNext Item for inventory {inventory_item_id} "
 					f"(sku={inv.get('sku') or '-'})"
@@ -89,33 +75,12 @@ class InventoryItemHandler(BaseHandler):
 				if changed:
 					self.sync._save_item(item)
 					updated.append(item_code)
-				# Keep mapping inventory id warm for next events.
-				self._link_mapping_inventory_id(item_code, inventory_item_id, inv)
 
-		if not updated and not item_codes:
-			return f"{event.name}: no matching Item for {inventory_item_id}"
 		return (
 			f"{event.name}: inventory {inventory_item_id} → "
 			f"{', '.join(updated) if updated else 'no field changes'} "
 			f"(items={', '.join(item_codes) or '-'})"
 		)
-
-	def _handle_delete(self, inventory_item_id: str) -> str:
-		"""Clear inventory id on mappings; do not delete ERPNext Items."""
-		names = frappe.get_all(
-			"Medusa Item Mapping",
-			filters={"medusa_inventory_item_id": inventory_item_id},
-			pluck="name",
-		)
-		for name in names:
-			frappe.db.set_value(
-				"Medusa Item Mapping",
-				name,
-				"medusa_inventory_item_id",
-				"",
-				update_modified=False,
-			)
-		return f"inventory-item.deleted: cleared mapping inventory id ({len(names)} row(s))"
 
 	def _fetch_inventory_item(self, inventory_item_id: str) -> dict:
 		last_err = None
@@ -143,22 +108,28 @@ class InventoryItemHandler(BaseHandler):
 			pid = variant.get("product_id") or (variant.get("product") or {}).get("id")
 			if pid and pid not in ids:
 				ids.append(pid)
-		# When Admin returns empty variants, recover product_id from existing mappings.
-		if not ids:
-			filters = []
-			if inv.get("id"):
-				filters.append({"medusa_inventory_item_id": inv["id"]})
-			sku = (inv.get("sku") or "").strip()
-			if sku:
-				filters.append({"sku": sku})
-			for filt in filters:
-				for pid in frappe.get_all(
-					"Medusa Item Mapping",
-					filters=filt,
-					pluck="medusa_product_id",
-				):
-					if pid and pid not in ids:
-						ids.append(pid)
+		sku = (inv.get("sku") or "").strip()
+		if not ids and sku:
+			from medusa_connector.product.item_mapping import (
+				fetch_product_id_for_variant,
+				get_medusa_product_id_from_row,
+			)
+
+			for row in frappe.get_all(
+				"Ecommerce Item",
+				filters={"integration": MODULE_NAME, "sku": sku},
+				fields=["integration_item_code", "variant_id", "variant_of", "has_variants"],
+			):
+				pid = get_medusa_product_id_from_row(row, fetch_if_missing=False)
+				if not pid:
+					vid = row.variant_id or (
+						row.integration_item_code
+						if cstr(row.integration_item_code).startswith("variant_")
+						else None
+					)
+					pid = fetch_product_id_for_variant(vid) if vid else None
+				if pid and pid not in ids:
+					ids.append(pid)
 		return ids
 
 	def _resync_product(self, product_id: str) -> str:
@@ -168,7 +139,6 @@ class InventoryItemHandler(BaseHandler):
 		return result.get("item_code") or product_id
 
 	def _resolve_erpnext_item_codes(self, inv: dict) -> list[str]:
-		"""Map Inventory Item → ERPNext Item codes via mapping, variants, or SKU."""
 		codes: list[str] = []
 		seen: set[str] = set()
 
@@ -177,70 +147,38 @@ class InventoryItemHandler(BaseHandler):
 				seen.add(code)
 				codes.append(code)
 
-		inv_id = inv.get("id")
-		if inv_id:
-			for row in frappe.get_all(
-				"Medusa Item Mapping",
-				filters={"medusa_inventory_item_id": inv_id},
-				pluck="erpnext_item_code",
-			):
-				_add(row)
-
 		for variant in inv.get("variants") or []:
 			if not isinstance(variant, dict):
 				continue
 			vid = variant.get("id")
 			if vid:
-				code = frappe.db.get_value(
-					"Medusa Item Mapping",
-					{"medusa_variant_id": vid},
-					"erpnext_item_code",
+				_add(
+					frappe.db.get_value(
+						"Ecommerce Item",
+						{"integration": MODULE_NAME, "variant_id": vid},
+						"erpnext_item_code",
+					)
 				)
-				_add(code)
-			# Fallback: variant SKU / metadata erpnext code
 			sku = variant.get("sku")
 			if sku:
-				_add(frappe.db.get_value("Medusa Item Mapping", {"sku": sku}, "erpnext_item_code"))
+				_add(
+					frappe.db.get_value(
+						"Ecommerce Item",
+						{"integration": MODULE_NAME, "sku": sku},
+						"erpnext_item_code",
+					)
+				)
 				_add(sku if frappe.db.exists("Item", sku) else None)
 
 		sku = (inv.get("sku") or "").strip()
 		if sku:
-			_add(frappe.db.get_value("Medusa Item Mapping", {"sku": sku}, "erpnext_item_code"))
+			_add(
+				frappe.db.get_value(
+					"Ecommerce Item",
+					{"integration": MODULE_NAME, "sku": sku},
+					"erpnext_item_code",
+				)
+			)
 			_add(sku if frappe.db.exists("Item", sku) else None)
-			# Admin product-variants by SKU when inventory has no embedded variants.
-			if not codes:
-				try:
-					resp = self.products.client.execute_rest(
-						"GET",
-						"/admin/product-variants",
-						params={"sku": sku, "limit": 5},
-					)
-					for variant in (resp or {}).get("variants") or []:
-						vid = variant.get("id")
-						if vid:
-							_add(
-								frappe.db.get_value(
-									"Medusa Item Mapping",
-									{"medusa_variant_id": vid},
-									"erpnext_item_code",
-								)
-							)
-						_add(
-							variant.get("sku") if frappe.db.exists("Item", variant.get("sku") or "") else None
-						)
-				except Exception:
-					pass
 
 		return codes
-
-	def _link_mapping_inventory_id(self, item_code: str, inventory_item_id: str, inv: dict) -> None:
-		name = frappe.db.get_value("Medusa Item Mapping", {"erpnext_item_code": item_code}, "name")
-		if not name:
-			return
-		frappe.db.set_value(
-			"Medusa Item Mapping",
-			name,
-			"medusa_inventory_item_id",
-			inventory_item_id,
-			update_modified=False,
-		)

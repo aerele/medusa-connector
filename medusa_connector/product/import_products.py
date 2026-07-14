@@ -12,21 +12,19 @@ import frappe
 from frappe.utils import get_datetime, now_datetime
 
 from medusa_connector.constants import (
+	MODULE_NAME,
 	PRODUCT_SYNC_JOB_NAME,
 	PRODUCT_SYNC_REALTIME_KEY,
 	SETTING_DOCTYPE,
 )
 from medusa_connector.medusa.product import ProductService
-from medusa_connector.medusa_connector.doctype.medusa_item_mapping.medusa_item_mapping import (
+from medusa_connector.product.item_mapping import (
 	get_mapping_health,
-	is_synced,
-)
-from medusa_connector.medusa_connector.doctype.medusa_sync_log.medusa_sync_log import (
-	create_sync_log,
-	update_sync_log,
+	is_product_synced,
 )
 from medusa_connector.product.mapper import ProductMapper
 from medusa_connector.product.sync import ProductSync
+from medusa_connector.utils.logging import create_sync_log, update_sync_log
 
 
 def import_single_product(product_id: str, *, force: bool = True) -> dict:
@@ -143,7 +141,7 @@ def run_product_sync(
 				frappe.db.savepoint(savepoint)
 				# Incremental/full without force: still update existing via force=False
 				# which still updates fields when mapped.
-				if not force and is_synced(product_id) and mode == "Full":
+				if not force and is_product_synced(product_id, product) and mode == "Full":
 					# Full without force still re-syncs for reconciliation; only skip
 					# when explicitly wanting create-only — default is update.
 					pass
@@ -229,8 +227,19 @@ def run_product_sync(
 def retry_failed_products(log_name: str) -> dict:
 	"""Re-run product ids stored on a Sync Log's failed_ids field."""
 	frappe.only_for("System Manager")
-	log = frappe.get_doc("Medusa Sync Log", log_name)
-	ids = [x.strip() for x in (log.failed_ids or "").split(",") if x.strip()]
+	log = frappe.get_doc("Ecommerce Integration Log", log_name)
+	ids = []
+	try:
+		import json
+
+		resp = json.loads(log.response_data or "{}")
+		raw_ids = resp.get("failed_ids") or []
+		if isinstance(raw_ids, str):
+			ids = [x.strip() for x in raw_ids.split(",") if x.strip()]
+		elif isinstance(raw_ids, list):
+			ids = [str(x).strip() for x in raw_ids if str(x).strip()]
+	except Exception:
+		ids = []
 	if not ids:
 		return {"ok": False, "message": "No failed product ids on this log."}
 
@@ -248,19 +257,22 @@ def get_product_counts() -> dict:
 	medusa_count = page.get("count") or 0
 
 	erpnext_count = frappe.db.count("Item", {"variant_of": ["is", "not set"], "has_variants": ["in", [0, 1]]})
-	# Templates + simple items only for "synced products"
-	synced_count = frappe.db.count(
-		"Medusa Item Mapping",
-		{"has_variants": ["in", [0, 1]], "medusa_variant_id": ["in", ["", None]]},
+	# Distinct Medusa products represented by template rows or sellable (variant) rows.
+	# Prefer counting template anchors + simple sellables that are not under a template.
+	template_count = frappe.db.count(
+		"Ecommerce Item",
+		{"integration": MODULE_NAME, "has_variants": 1},
 	)
-	# Include simple products that store empty variant_id
-	if synced_count == 0:
-		synced_count = frappe.db.sql(
-			"""
-			select count(*) from `tabMedusa Item Mapping`
-			where ifnull(medusa_variant_id, '') = ''
-			"""
-		)[0][0]
+	simple_sellable = frappe.db.sql(
+		"""
+		SELECT COUNT(*) FROM `tabEcommerce Item`
+		WHERE integration = %s
+		  AND IFNULL(has_variants, 0) = 0
+		  AND IFNULL(variant_of, '') = ''
+		""",
+		(MODULE_NAME,),
+	)[0][0]
+	synced_count = int(template_count or 0) + int(simple_sellable or 0)
 
 	return {
 		"medusaCount": medusa_count,
@@ -290,7 +302,7 @@ def list_medusa_products(
 				"handle": product.get("handle"),
 				"thumbnail": product.get("thumbnail"),
 				"sku": _primary_sku(product),
-				"synced": is_synced(pid) if pid else False,
+				"synced": is_product_synced(pid, product) if pid else False,
 				"updated_at": product.get("updated_at"),
 			}
 		)

@@ -157,19 +157,25 @@ class ProductService:
 		)
 		return response if isinstance(response, dict) else {}
 
-	def get_variant(self, variant_id: str) -> dict:
+	def get_variant(self, variant_id: str, *, fields: str | None = None) -> dict:
 		"""Fetch one Product Variant by id via Admin list API.
 
 		Medusa Admin exposes list/filter on ``GET /admin/product-variants``
 		(``id`` / ``id[]``). There is no reliable ``GET .../product-variants/{id}``
 		route on all versions. Response includes ``product_id`` and ``hs_code``.
+
+		Pass ``fields`` to expand relations (e.g. ``*inventory_items`` for stock push).
+		Without an explicit expand, Medusa omits ``inventory_items``.
 		"""
 		if not variant_id:
 			return {}
-		for params in (
+		for base in (
 			{"id": variant_id, "limit": 1},
 			{"id[]": variant_id, "limit": 1},
 		):
+			params = dict(base)
+			if fields:
+				params["fields"] = fields
 			response = self.client.execute_rest("GET", "/admin/product-variants", params=params)
 			variants = (response or {}).get("variants") or []
 			if variants:

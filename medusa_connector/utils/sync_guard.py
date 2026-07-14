@@ -100,18 +100,14 @@ def should_skip_inbound_for_product(product_id: str | None) -> bool:
 def try_claim_product_sync(product_id: str) -> bool:
 	"""Return True if this worker should run a full product resync.
 
-	Uses a short Redis lock so one product.updated event and multiple
-	product-variant.updated events for the same product are processed only once.
+	Uses an atomic Redis SET NX lock so concurrent product.updated /
+	product-variant.updated jobs for the same product do not race Item saves.
 	"""
 	if not product_id:
 		return True
 	key = f"medusa:product_sync_claim:{product_id}"
-	cache = frappe.cache()
-	# Redis SET NX via frappe cache: get then set is racy but good enough with short TTL.
-	if cache.get_value(key):
-		return False
-	cache.set_value(key, 1, expires_in_sec=PRODUCT_SYNC_CLAIM_SEC)
-	return True
+	# nx=True is atomic; the previous get-then-set path allowed dual workers.
+	return bool(frappe.cache().set(key, "1", nx=True, ex=PRODUCT_SYNC_CLAIM_SEC))
 
 
 def release_product_sync_claim(product_id: str | None) -> None:

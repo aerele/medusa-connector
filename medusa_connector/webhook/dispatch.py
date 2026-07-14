@@ -3,10 +3,8 @@
 
 """Background dispatcher.
 
-Turns a logged webhook into a :class:`MedusaEvent` and routes it to the handler
-registered for its event name. Processing is idempotent (already-processed logs
-are skipped) and failures are retried up to :data:`MAX_RETRIES` by a scheduler
-sweep, with each attempt recorded on the log.
+Turns a logged webhook (Ecommerce Integration Log) into a :class:`MedusaEvent`
+and routes it to the handler registered for its event name.
 """
 
 from __future__ import annotations
@@ -16,122 +14,167 @@ import json
 import frappe
 from frappe.utils import now_datetime
 
+from medusa_connector.constants import MODULE_NAME
+from medusa_connector.utils.logging import create_medusa_log
 from medusa_connector.webhook.base import MedusaEvent
 from medusa_connector.webhook.registry import get_handler
 
-# Maximum automatic retries for a failing event before it is left as "Failed".
+# Maximum automatic retries for a failing event before it is left as Error.
 MAX_RETRIES = 5
 
 
-def dispatch_event(log_name: str) -> None:
-	"""Process one Medusa Webhook Log row. Raises on handler failure (for RQ)."""
-	frappe.set_user("Administrator")
-	log = frappe.get_doc("Medusa Webhook Log", log_name)
+def dispatch_event(log_name: str | None = None, payload=None, request_id: str | None = None) -> None:
+	"""Process one Ecommerce Integration Log webhook row.
 
-	# Idempotency: never re-apply a successfully processed event.
-	if log.status == "Processed":
+	Accepts ``log_name`` or Shopify-style ``request_id`` / ``payload``.
+	"""
+	frappe.set_user("Administrator")
+	name = log_name or request_id or frappe.flags.request_id
+	if not name:
+		frappe.throw("dispatch_event requires log_name or request_id")
+
+	frappe.flags.request_id = name
+	log = frappe.get_doc("Ecommerce Integration Log", name)
+
+	# Idempotency: never re-apply a successful event.
+	if log.status == "Success":
 		return
 
 	try:
-		event = _build_event(log)
+		event = _build_event(log, payload)
 		handler = get_handler(event.name)
 		if handler is None:
-			# Unmapped event: acknowledge receipt without failing (extensible later).
-			_finish(
-				log,
-				status="Processed",
-				notes=f"No handler registered for '{event.name}'",
-				outcome=f"No handler registered for '{event.name}'",
+			create_medusa_log(
+				status="Success",
+				message=log.message,
+				response_data={"outcome": f"No handler registered for '{event.name}'"},
+				make_new=False,
 			)
 			return
 
 		outcome = handler.handle(event)
-		_finish(log, status="Processed", notes="Handler completed successfully", outcome=outcome or None)
-	except Exception:
-		tb = frappe.get_traceback(with_context=True)
-		_append_retry_history(log, status="Failed", error=tb, trigger="dispatch")
-		log.db_set(
-			{
-				"status": "Failed",
-				"error": tb,
-				"retry_count": (log.retry_count or 0) + 1,
-				"processing_notes": f"Failed at {now_datetime()}",
+		create_medusa_log(
+			status="Success",
+			message=log.message,
+			response_data={
+				"outcome": outcome,
+				"event_name": event.name,
+				"event_id": event.event_id,
+				"processed_at": str(now_datetime()),
 			},
-			update_modified=True,
+			make_new=False,
 		)
-		frappe.db.commit()
-		# Re-raise so the RQ job is recorded as failed; the scheduler sweep retries.
+	except Exception as exc:
+		# create_log with rollback=True rolls back then re-inserts log update.
+		create_medusa_log(
+			status="Error",
+			message=log.message,
+			exception=exc,
+			response_data={
+				"event_name": getattr(log, "message", None),
+				"failed_at": str(now_datetime()),
+			},
+			rollback=True,
+			make_new=False,
+		)
+		# Restore request_id after rollback path
+		frappe.flags.request_id = name
 		raise
 
 
-def _finish(log, *, status: str, notes: str | None = None, outcome: str | None = None) -> None:
-	log.db_set(
-		{
-			"status": status,
-			"error": outcome,
-			"processing_notes": notes,
-			"processed_at": now_datetime(),
-		},
-		update_modified=True,
-	)
-	frappe.db.commit()
-
-
-def _append_retry_history(log, *, status: str, error: str, trigger: str) -> None:
-	history = []
-	if log.retry_history:
+def _build_event(log, payload=None) -> MedusaEvent:
+	raw = payload
+	if raw is None:
 		try:
-			history = json.loads(log.retry_history)
-			if not isinstance(history, list):
-				history = []
+			raw = json.loads(log.request_data or "{}")
 		except (ValueError, TypeError):
-			history = []
-	history.append(
-		{
-			"at": str(now_datetime()),
-			"status": status,
-			"error": (error or "")[:1000],
-			"retry_count": (log.retry_count or 0) + 1,
-			"trigger": trigger,
-		}
-	)
-	log.db_set("retry_history", json.dumps(history, indent=2), update_modified=False)
+			raw = {}
 
+	if not isinstance(raw, dict):
+		raw = {"data": raw}
 
-def _build_event(log) -> MedusaEvent:
-	try:
-		raw = json.loads(log.payload or "{}")
-	except (ValueError, TypeError):
-		raw = {}
+	# Support both structured wrapper and bare body.
+	event_name = raw.get("event_name") or ""
+	event_id = raw.get("event_id") or log.name
+	body = raw.get("payload") if isinstance(raw.get("payload"), dict) else raw
+	if isinstance(body, dict) and "payload" in raw and "event_name" in raw:
+		# wrapper from receive()
+		pass
+	elif isinstance(raw.get("data"), dict):
+		body = raw
+
+	if not event_name and isinstance(body, dict):
+		event_name = body.get("event") or body.get("name") or body.get("event_name") or ""
+
+	data = body.get("data") if isinstance(body, dict) and isinstance(body.get("data"), dict) else body
+	if not isinstance(data, dict):
+		data = {}
+
 	return MedusaEvent(
-		name=log.event_name or "",
-		event_id=log.event_id or log.name,
-		data=raw.get("data") or raw,
-		raw=raw,
+		name=event_name or "",
+		event_id=str(event_id),
+		data=data,
+		raw=body if isinstance(body, dict) else raw,
 		log_name=log.name,
 	)
 
 
 def retry_failed_webhooks() -> None:
-	"""Scheduler sweep: re-enqueue failed events that still have retries left."""
+	"""Scheduler sweep: re-enqueue failed Medusa webhook jobs still under the retry cap.
+
+	Uses response_data.failed_at / message prefix webhook: and status Error.
+	"""
 	failed = frappe.get_all(
-		"Medusa Webhook Log",
-		filters={"status": "Failed", "retry_count": ["<", MAX_RETRIES]},
-		pluck="name",
+		"Ecommerce Integration Log",
+		filters={
+			"integration": MODULE_NAME,
+			"status": "Error",
+			"method": ["like", "%dispatch_event%"],
+		},
+		fields=["name", "message", "response_data"],
 		limit=200,
+		order_by="modified asc",
 	)
-	for name in failed:
-		# Reset to Queued so dispatch is allowed (status must not be Processed).
+	for row in failed:
+		# Cap retries by counting Error updates is not stored; use response_data if present.
+		retry_count = 0
+		try:
+			resp = json.loads(row.response_data or "{}")
+			retry_count = int(resp.get("retry_count") or 0)
+		except (ValueError, TypeError):
+			retry_count = 0
+		if retry_count >= MAX_RETRIES:
+			continue
+
 		frappe.db.set_value(
-			"Medusa Webhook Log",
-			name,
-			{"status": "Queued", "processing_notes": f"Auto-retry scheduled at {now_datetime()}"},
+			"Ecommerce Integration Log",
+			row.name,
+			{
+				"status": "Queued",
+				"traceback": "",
+			},
 			update_modified=False,
 		)
+		# Bump retry counter in response_data
+		try:
+			resp = json.loads(row.response_data or "{}")
+		except (ValueError, TypeError):
+			resp = {}
+		resp["retry_count"] = retry_count + 1
+		resp["retry_scheduled_at"] = str(now_datetime())
+		frappe.db.set_value(
+			"Ecommerce Integration Log",
+			row.name,
+			"response_data",
+			json.dumps(resp, indent=2),
+			update_modified=False,
+		)
+
 		frappe.enqueue(
 			"medusa_connector.webhook.dispatch.dispatch_event",
 			queue="short",
-			job_id=f"medusa-webhook-retry-{name}",
+			job_id=f"medusa-webhook-retry-{row.name}",
 			deduplicate=True,
-			log_name=name,
+			log_name=row.name,
+			request_id=row.name,
 		)

@@ -7,9 +7,6 @@ from __future__ import annotations
 
 import frappe
 
-from medusa_connector.medusa_connector.doctype.medusa_item_mapping.medusa_item_mapping import (
-	get_mapping_health,
-)
 from medusa_connector.product.import_products import (
 	get_product_counts,
 	health_check,
@@ -18,6 +15,9 @@ from medusa_connector.product.import_products import (
 	list_medusa_products,
 	retry_failed_products,
 	start_product_sync,
+)
+from medusa_connector.product.item_mapping import (
+	get_mapping_health,
 )
 
 
