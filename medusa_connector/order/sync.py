@@ -525,10 +525,6 @@ def sync_old_orders() -> dict | None:
 	return result
 
 
-# Public alias — preferred name for the full-lifecycle bulk job
-sync_orders = sync_old_orders
-
-
 def _run_old_orders_sync(from_date, to_date, *, force: bool = False) -> dict:
 	"""Core date-range loop: full lifecycle sync for every order in range.
 
