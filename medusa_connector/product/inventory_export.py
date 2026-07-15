@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""ERPNext → Medusa inventory levels (Shopify-style scheduled push).
+"""ERPNext → Medusa inventory levels (scheduled one-way push).
 
 Uses Ecommerce Core inventory helpers + Ecommerce Item + Ecommerce Integration Log.
 """
@@ -17,6 +17,7 @@ from ecommerce_core.controllers.inventory import (
 	update_inventory_sync_status,
 )
 from ecommerce_core.controllers.scheduling import need_to_run
+from frappe import _
 from frappe.utils import cint, create_batch, cstr, now
 
 from medusa_connector.constants import MODULE_NAME, SETTING_DOCTYPE
@@ -37,7 +38,7 @@ def update_inventory_on_medusa(force: bool = False) -> dict | None:
 	if not settings.enabled or not settings.get("update_erpnext_stock_levels_to_medusa"):
 		return None
 
-	wh_map = settings.get_erpnext_to_integration_wh_mapping()
+	wh_map = settings.get_erpnext_to_medusa_wh_mapping()
 	if not wh_map:
 		return None
 
@@ -245,7 +246,7 @@ def _finish_log(log_name: str, results: list) -> dict:
 	else:
 		status = "Partial Success"
 
-	# Ecommerce Integration Log uses free-text status (Shopify: Success/Error/…).
+	# Ecommerce Integration Log uses free-text status (Success/Error/…).
 	log_status = "Success" if status == "Success" else "Error"
 	if status == "Partial Success":
 		log_status = "Error"
@@ -282,22 +283,26 @@ def _finish_log(log_name: str, results: list) -> dict:
 
 @frappe.whitelist()
 def sync_inventory_now() -> dict:
-	"""Desk button: force one inventory push (ignores frequency gate)."""
+	"""Force one inventory push (ignores frequency gate)."""
 	frappe.only_for("System Manager")
 	settings = frappe.get_doc(SETTING_DOCTYPE)
 	if not settings.enabled:
-		frappe.throw(frappe._("Enable the Medusa Connector first."))
+		frappe.throw(_("Please enable the Medusa Connector first."), title=_("Medusa Connector"))
 	if not settings.get("update_erpnext_stock_levels_to_medusa"):
-		frappe.throw(frappe._("Enable 'Update Stock Levels to Medusa' first."))
-	if not settings.get_erpnext_to_integration_wh_mapping():
 		frappe.throw(
-			frappe._("Configure at least one enabled Warehouse Mapping row before syncing inventory.")
+			_("Please enable Update Stock Levels to Medusa first."),
+			title=_("Inventory Sync"),
+		)
+	if not settings.get_erpnext_to_medusa_wh_mapping():
+		frappe.throw(
+			_("Please add at least one enabled Warehouse Mapping before syncing inventory."),
+			title=_("Inventory Sync"),
 		)
 
 	result = update_inventory_on_medusa(force=True)
 	if result is None:
 		return {
 			"status": "Skipped",
-			"message": frappe._("Inventory sync did not run (disabled or misconfigured)."),
+			"message": _("Inventory sync did not run. Check that it is enabled and configured."),
 		}
 	return result

@@ -1,6 +1,6 @@
 # Inventory sync (ERPNext → Medusa)
 
-Shopify-style **one-way** stock push. ERPNext is the quantity source of truth.
+**One-way** stock push. ERPNext is the quantity source of truth.
 
 ## Settings layout
 
@@ -26,7 +26,7 @@ On the **Inventory** tab:
 Rules:
 
 - One ERPNext warehouse → one Medusa location (1:1).
-- Group warehouses are rolled up to leaf bins (same idea as Unicommerce).
+- Group warehouses are rolled up to leaf bins via Ecommerce Core inventory helpers.
 - Existing warehouse links are preserved when you re-fetch locations.
 
 If the mapping table is empty but **Default Warehouse** + **Default Location ID** exist, the connector seeds one mapping row automatically on save (migration helper).

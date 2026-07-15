@@ -1,6 +1,6 @@
 # Customer sync (order-time only)
 
-Follows **Shopify / Ecommerce Core**: customers are created when **orders** are
+Follows **Ecommerce Core**: customers are created when **orders** are
 synced, not via a standalone customer import or live `customer.created` create.
 
 ## When ERPNext Customer is created
@@ -36,7 +36,7 @@ Email is **not** used for matching.
 ## Shared core
 
 `MedusaCustomer` subclasses `ecommerce_core.controllers.customer.EcommerceCustomer`
-and uses the same create methods as Shopify for Customer / Address / Contact.
+and uses Ecommerce Core create methods for Customer / Address / Contact.
 
 Country codes use `ecommerce_core.utils.address_mapping.get_country_name`.
 

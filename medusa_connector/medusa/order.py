@@ -31,17 +31,27 @@ class OrderService:
 		q: str | None = None,
 		created_at_gt: str | None = None,
 		created_at_lt: str | None = None,
+		created_at_gte: str | None = None,
+		created_at_lte: str | None = None,
 		fields: str | None = DEFAULT_ORDER_FIELDS,
 	) -> dict:
-		"""``GET /admin/orders`` — paginated list."""
+		"""``GET /admin/orders`` — paginated list.
+
+		Date filters use Medusa Admin operators (``gte`` / ``lte`` for inclusive
+		Sync Old Orders ranges; ``gt`` / ``lt`` also supported).
+		"""
 		params: dict = {"limit": limit, "offset": offset}
 		if fields:
 			params["fields"] = fields
 		if q:
 			params["q"] = q
-		if created_at_gt:
+		if created_at_gte:
+			params["created_at[gte]"] = created_at_gte
+		elif created_at_gt:
 			params["created_at[gt]"] = created_at_gt
-		if created_at_lt:
+		if created_at_lte:
+			params["created_at[lte]"] = created_at_lte
+		elif created_at_lt:
 			params["created_at[lt]"] = created_at_lt
 		response = self.client.execute_rest("GET", "/admin/orders", params=params)
 		if not isinstance(response, dict):
@@ -59,6 +69,8 @@ class OrderService:
 		page_size: int = 50,
 		created_at_gt: str | None = None,
 		created_at_lt: str | None = None,
+		created_at_gte: str | None = None,
+		created_at_lte: str | None = None,
 		q: str | None = None,
 	):
 		"""Yield every order page-by-page (for Sync Old Orders)."""
@@ -69,6 +81,8 @@ class OrderService:
 				offset=offset,
 				created_at_gt=created_at_gt,
 				created_at_lt=created_at_lt,
+				created_at_gte=created_at_gte,
+				created_at_lte=created_at_lte,
 				q=q,
 			)
 			orders = page.get("orders") or []

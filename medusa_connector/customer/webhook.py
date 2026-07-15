@@ -3,7 +3,7 @@
 
 """Customer webhook events — acknowledged only (no ERPNext customer create).
 
-Shopify / Ecommerce Core pattern: customers are created when **orders** sync,
+Customers are created when **orders** sync,
 not on standalone customer.created/updated webhooks.
 
 Events stay registered so Medusa subscriptions remain complete; handlers are

@@ -34,6 +34,8 @@
   "sync_sales_invoice",
   "sales_invoice_series",
   "cash_bank_account",
+  "sync_delivery_note",
+  "delivery_note_series",
   "section_order_taxes",
   "default_sales_tax_account",
   "default_shipping_charges_account",
@@ -41,6 +43,10 @@
   "consolidate_taxes",
   "add_shipping_as_item",
   "shipping_item",
+  "section_sync_old_orders",
+  "sync_old_orders",
+  "old_orders_from",
+  "old_orders_to",
   "section_products",
   "item_group",
   "default_stock_uom",
@@ -213,7 +219,7 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Customer Group applied when creating ERPNext Customers during order sync (Shopify / Ecommerce Core pattern).",
+   "description": "Customer Group applied when creating ERPNext Customers during order sync.",
    "fieldname": "customer_group",
    "fieldtype": "Link",
    "label": "Customer Group",
@@ -282,6 +288,21 @@
    "options": "Account"
   },
   {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "When a Medusa fulfillment is created (or shipment is marked), create a Delivery Note against the Sales Order. One DN per fulfillment id (partial fulfillments supported).",
+   "fieldname": "sync_delivery_note",
+   "fieldtype": "Check",
+   "label": "Sync Delivery Note on Fulfillment"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_delivery_note",
+   "fieldname": "delivery_note_series",
+   "fieldtype": "Select",
+   "label": "Delivery Note Series",
+   "mandatory_depends_on": "eval:doc.sync_delivery_note"
+  },
+  {
    "depends_on": "eval:doc.enabled",
    "fieldname": "section_order_taxes",
    "fieldtype": "Section Break",
@@ -310,7 +331,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enabled",
-   "description": "Merge tax rows by account head (Shopify-style).",
+   "description": "Merge tax rows that share the same account head.",
    "fieldname": "consolidate_taxes",
    "fieldtype": "Check",
    "label": "Consolidate Taxes"
@@ -328,8 +349,38 @@
    "fieldname": "shipping_item",
    "fieldtype": "Link",
    "label": "Shipping Item",
-   "options": "Item",
-   "mandatory_depends_on": "eval:doc.add_shipping_as_item"
+   "mandatory_depends_on": "eval:doc.add_shipping_as_item",
+   "options": "Item"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_sync_old_orders",
+   "fieldtype": "Section Break",
+   "label": "Sync Orders"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "When enabled and saved, imports Medusa orders between From and To with the full lifecycle: Sales Order, Sales Invoice/Payment (if paid), Delivery Notes (if fulfilled), and cancel/status updates. Existing ERPNext orders are updated to match Medusa. The checkbox is cleared after the run finishes.",
+   "fieldname": "sync_old_orders",
+   "fieldtype": "Check",
+   "label": "Sync Orders"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_old_orders",
+   "description": "Sync Medusa orders created on or after this date/time (full lifecycle).",
+   "fieldname": "old_orders_from",
+   "fieldtype": "Datetime",
+   "label": "From",
+   "mandatory_depends_on": "eval:doc.sync_old_orders"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_old_orders",
+   "description": "Sync Medusa orders created on or before this date/time (full lifecycle).",
+   "fieldname": "old_orders_to",
+   "fieldtype": "Datetime",
+   "label": "To",
+   "mandatory_depends_on": "eval:doc.sync_old_orders"
   },
   {
    "depends_on": "eval:doc.enabled",
@@ -444,7 +495,8 @@
    "description": "Push ERPNext Bin quantities to Medusa location levels (ERPNext is the stock master). Map each ERPNext warehouse to a Medusa stock location below. Open stock in ERPNext before enabling \u2014 enabling with zero stock can overwrite Medusa quantities with 0. Medusa Admin stock edits will be overwritten on the next sync.",
    "fieldname": "update_erpnext_stock_levels_to_medusa",
    "fieldtype": "Check",
-   "label": "Update Stock Levels to Medusa"
+   "label": "Update Stock Levels to Medusa",
+   "show_description_on_click": 1
   },
   {
    "default": "15",
@@ -495,7 +547,6 @@
   },
   {
    "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
-   "description": "Shared secret for HMAC-SHA256 (hex) verification and for the ?token= fallback used by the Medusa webhooks plugin.",
    "fieldname": "webhook_secret",
    "fieldtype": "Password",
    "label": "Webhook Secret",
@@ -534,6 +585,7 @@
    "description": "HTTP header carrying the HMAC-SHA256 hex digest of the raw body. Used when the sender can sign; the webhooks plugin uses ?token= instead.",
    "fieldname": "webhook_signature_header",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Signature Header"
   },
   {
@@ -588,7 +640,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-14 12:24:32.665038",
+ "modified": "2026-07-15 08:28:37.004298",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Settings",

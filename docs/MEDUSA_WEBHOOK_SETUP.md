@@ -93,8 +93,9 @@ module.exports = defineConfig({
 
           // Fulfillment
           "order.fulfillment_created",
-          "order.shipment_created",
-          "fulfillment.canceled",
+          "order.fulfillment_canceled",
+          "shipment.created",
+          "delivery.created",
 
           // Returns
           "order.return_requested",
@@ -183,8 +184,9 @@ export const config: SubscriberConfig = {
 
     // Fulfillment
     "order.fulfillment_created",
-    "order.shipment_created",
-    "fulfillment.canceled",
+    "order.fulfillment_canceled",
+    "shipment.created",
+    "delivery.created",
 
     // Returns
     "order.return_requested",
@@ -302,7 +304,7 @@ plugin's admin API.
 | Customer           | `customer.created`, `customer.updated`, `customer.deleted`                                                                      |
 | Order              | `order.placed`, `order.updated`, `order.canceled`, `order.completed`                                                            |
 | Payment            | `payment.captured`, `payment.refunded`                                                                                          |
-| Fulfillment        | `order.fulfillment_created`, `order.shipment_created`, `fulfillment.canceled`                                                   |
+| Fulfillment        | `order.fulfillment_created`, `order.fulfillment_canceled`, `shipment.created`, `delivery.created` (aliases: `order.shipment_created`, `fulfillment.canceled`) |
 | Return             | `order.return_requested`, `order.return_received`                                                                               |
 | Inventory          | `inventory-item.created`, `inventory-item.updated`, `inventory-item.deleted`, `inventory-level.updated`                         |
 | Price              | `price-list.created`, `price-list.updated`, `price-list.deleted`, `price-set.created`, `price-set.updated`, `price-set.deleted` |

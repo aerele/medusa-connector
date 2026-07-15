@@ -209,6 +209,7 @@ function load_naming_series(frm) {
 			};
 			set_opts("sales_order_series", "sales_order_series");
 			set_opts("sales_invoice_series", "sales_invoice_series");
+			set_opts("delivery_note_series", "delivery_note_series");
 		},
 	});
 }

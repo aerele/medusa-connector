@@ -26,7 +26,7 @@ MAX_RETRIES = 5
 def dispatch_event(log_name: str | None = None, payload=None, request_id: str | None = None) -> None:
 	"""Process one Ecommerce Integration Log webhook row.
 
-	Accepts ``log_name`` or Shopify-style ``request_id`` / ``payload``.
+	Accepts ``log_name`` or standard ``request_id`` / ``payload``.
 	"""
 	frappe.set_user("Administrator")
 	name = log_name or request_id or frappe.flags.request_id

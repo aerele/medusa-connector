@@ -3,8 +3,7 @@
 
 """Medusa-facing wrappers around Ecommerce Core integration logging.
 
-All sync/webhook outcomes go to **Ecommerce Integration Log** (Shopify pattern:
-``create_shopify_log`` → ``create_log(module_def=...)``).
+All sync/webhook outcomes go to **Ecommerce Integration Log** via ``create_log(module_def=...)``.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ def create_medusa_log(**kwargs):
 
 
 def _normalize_status(status: str) -> str:
-	"""Map connector statuses onto values used by Ecommerce Integration Log / Shopify."""
+	"""Map connector statuses onto Ecommerce Integration Log values."""
 	mapping = {
 		"Failed": "Error",
 		"Processed": "Success",

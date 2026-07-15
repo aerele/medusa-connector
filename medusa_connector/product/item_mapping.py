@@ -178,9 +178,10 @@ def upsert_mapping(
 
 	Template rows (``has_variants=1``) store the Medusa Product ID in
 	``integration_item_code`` so product-level ops can find the product.
-	"""
-	_ = (status, sync_status, error)  # accepted for call-site compatibility
 
+	``status``, ``sync_status``, and ``error`` are accepted for call-site
+	compatibility with older callers; Ecommerce Item rows no longer store them.
+	"""
 	has_variants = int(has_variants or 0)
 	variant_id = cstr(medusa_variant_id or variant_id or "")
 	medusa_product_id = cstr(medusa_product_id or "")
@@ -414,7 +415,7 @@ def mark_orphaned(medusa_product_id: str, variant_id: str | None = None) -> None
 	"""No-op for schema: Ecommerce Item has no status field.
 
 	Callers still disable the ERPNext Item; the Ecommerce Item row is kept for
-	identity history (Shopify behaviour).
+	identity history (standard behaviour).
 	"""
 	return
 

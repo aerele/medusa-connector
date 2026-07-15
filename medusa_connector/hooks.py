@@ -155,15 +155,14 @@ doc_events = {
 
 scheduler_events = {
 	"all": [
-		# Shopify-style inventory push (gated by frequency on Medusa Settings).
 		"medusa_connector.product.inventory_export.update_inventory_on_medusa",
 	],
 	"hourly_long": [
 		"medusa_connector.medusa.client.scheduled_health_check",
 		"medusa_connector.medusa.webhook_sync.scheduled_webhook_sync",
+		"medusa_connector.order.sync.sync_old_orders",
 	],
 	"cron": {
-		# Retry failed webhook events that still have attempts remaining.
 		"*/10 * * * *": [
 			"medusa_connector.webhook.dispatch.retry_failed_webhooks",
 		],

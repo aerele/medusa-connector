@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""ERPNext → Medusa product upload (Shopify-style Item hooks).
+"""ERPNext → Medusa product upload (Item document hooks).
 
 Medusa Admin API (verified against OpenAPI / docs.medusajs.com/api/admin):
 
@@ -18,7 +18,7 @@ Medusa Admin API (verified against OpenAPI / docs.medusajs.com/api/admin):
 - ``POST /admin/products/{id}/variants/{variant_id}`` — update variant
 - ``DELETE /admin/products/{id}`` — delete product
 
-Architecture mirrors Shopify ``upload_erpnext_item``: gated by settings flags,
+Architecture: Item document hooks gated by settings flags,
 driven by leaf Item create/update (not template), mapping + sync log.
 """
 
@@ -58,7 +58,7 @@ def upload_erpnext_item(doc, method: str | None = None) -> None:
 	if not settings.enabled or not settings.get("upload_erpnext_items"):
 		return
 
-	# Templates are not uploaded directly (Shopify pattern); leaf items drive upload.
+	# Templates are not uploaded directly; leaf items drive upload.
 	if doc.has_variants:
 		return
 
@@ -376,7 +376,7 @@ def _build_create_payload(item, template, settings, service: ProductService) -> 
 	if sales_channel_id:
 		payload["sales_channels"] = [{"id": sales_channel_id}]
 
-	# Weight (Shopify also maps weight when UOM is known).
+	# Map weight when UOM is known.
 	if flt(template.weight_per_unit):
 		payload["weight"] = flt(template.weight_per_unit)
 

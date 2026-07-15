@@ -10,6 +10,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from medusa_connector.constants import (
 	ADDRESS_ID_FIELD,
 	CUSTOMER_ID_FIELD,
+	FULFILLMENT_ID_FIELD,
 	ORDER_ID_FIELD,
 	ORDER_ITEM_DISCOUNT_FIELD,
 	ORDER_NUMBER_FIELD,
@@ -104,6 +105,18 @@ def setup_custom_fields(update: bool = True) -> None:
 			_order_id_field("naming_series"),
 			_order_number_field(ORDER_ID_FIELD),
 			_order_status_field(ORDER_NUMBER_FIELD),
+			{
+				"fieldname": FULFILLMENT_ID_FIELD,
+				"label": "Medusa Fulfillment ID",
+				"fieldtype": "Data",
+				"insert_after": ORDER_STATUS_FIELD,
+				"read_only": 1,
+				"print_hide": 1,
+				"translatable": 0,
+				"no_copy": 1,
+				"in_standard_filter": 1,
+				"search_index": 1,
+			},
 		],
 		"Sales Order Item": [
 			{

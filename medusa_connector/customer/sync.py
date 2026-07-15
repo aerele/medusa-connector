@@ -1,13 +1,13 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""Medusa → ERPNext customer helpers (Shopify / Ecommerce Core pattern).
+"""Medusa → ERPNext customer helpers (Ecommerce Core).
 
 Customer create/update runs **only during order synchronisation** — not via
 standalone customer webhooks or a bulk import job.
 
 Uses ``ecommerce_core.controllers.customer.EcommerceCustomer`` for Customer /
-Address / Contact creation (same base class as Shopify).
+Address / Contact creation via Ecommerce Core.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from medusa_connector.medusa.customer import CustomerService
 
 
 class MedusaCustomer(EcommerceCustomer):
-	"""Shopify-style customer adapter for Medusa order payloads."""
+	"""Customer adapter for Medusa order payloads."""
 
 	def __init__(self, customer_id: str, settings=None):
 		self.setting = settings or frappe.get_doc(SETTING_DOCTYPE)
@@ -94,7 +94,7 @@ class MedusaCustomer(EcommerceCustomer):
 		super().create_customer_address(address_fields)
 
 	def update_existing_addresses(self, customer: dict[str, Any]) -> None:
-		"""Update billing/shipping addresses on an already-synced customer (Shopify)."""
+		"""Update billing/shipping addresses on an already-synced customer."""
 		billing_address = (
 			customer.get("billing_address")
 			or customer.get("default_billing_address")
@@ -160,9 +160,8 @@ class MedusaCustomer(EcommerceCustomer):
 def resolve_order_customer(order: dict, *, settings=None, service: CustomerService | None = None) -> str:
 	"""Resolve ERPNext Customer for a Medusa order (create if missing).
 
-	Shopify flow:
-	  if not synced → create customer + address + contact
-	  else → update addresses
+	If not synced → create customer + address + contact.
+	Else → update addresses.
 	"""
 	settings = settings or frappe.get_cached_doc(SETTING_DOCTYPE)
 	if not order:
@@ -197,7 +196,7 @@ def resolve_order_customer(order: dict, *, settings=None, service: CustomerServi
 
 
 def ensure_order_customer(order: dict, *, settings=None) -> str:
-	"""Alias used by order pipeline (same as Shopify pre-SO customer step)."""
+	"""Resolve/create customer before Sales Order creation."""
 	return resolve_order_customer(order, settings=settings)
 
 
@@ -289,7 +288,7 @@ def _map_address_fields(
 	address_type: str,
 	email: str | None,
 ) -> dict[str, Any]:
-	"""Map Medusa address dict → ERPNext Address fields (Shopify-style)."""
+	"""Map Medusa address dict → ERPNext Address fields (standard)."""
 	country_code = medusa_address.get("country_code") or medusa_address.get("country")
 	country = get_country_name(cstr(country_code).upper() if country_code else None)
 	if not country and country_code and frappe.db.exists("Country", cstr(country_code)):

@@ -4,13 +4,13 @@
 import secrets
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
-from frappe.utils import now_datetime
+from frappe.utils import cint, get_datetime, now_datetime
 
 from medusa_connector.webhook.util import receiver_base_url
 
-# Webhook re-sync after save when these change. Status/result fields are excluded
-# so the sync service write-back does not re-enqueue itself.
+# Re-sync webhooks after save when these change (status fields excluded).
 SYNC_TRIGGER_FIELDS = (
 	"enabled",
 	"connection_mode",
@@ -19,8 +19,7 @@ SYNC_TRIGGER_FIELDS = (
 	"webhook_secret",
 )
 
-# Connection probe + store-defaults refresh on enable and when reachability
-# settings change while the connector stays enabled.
+# Re-check connection when enable / URL / mode / API key change.
 CONNECTION_VERIFY_FIELDS = (
 	"enabled",
 	"connection_mode",
@@ -77,12 +76,17 @@ class MedusaSettings(Document):
 		last_webhook_sync_message: DF.SmallText | None
 		medusa_base_url: DF.Data | None
 		medusa_store_id: DF.Data | None
+		old_orders_from: DF.Datetime | None
+		old_orders_to: DF.Datetime | None
 		on_item_delete: DF.Literal["Draft", "Delete"]
 		price_list: DF.Link | None
+		delivery_note_series: DF.Literal[None]
 		sales_invoice_series: DF.Literal[None]
 		sales_order_series: DF.Literal[None]
 		shipping_item: DF.Link | None
+		sync_delivery_note: DF.Check
 		sync_new_item_as_published: DF.Check
+		sync_old_orders: DF.Check
 		sync_sales_invoice: DF.Check
 		update_erpnext_stock_levels_to_medusa: DF.Check
 		update_medusa_item_on_update: DF.Check
@@ -106,23 +110,18 @@ class MedusaSettings(Document):
 			self._mark_disconnected()
 			return
 
-		# Shopify Setting.validate does the same when the integration is enabled:
-		# ensure Customer/Address identity custom fields exist (install/migrate also
-		# create them; this keeps saves self-healing if fields were removed).
 		from medusa_connector.setup import setup_custom_fields
 
 		setup_custom_fields(update=True)
 
-		# Connection first so store defaults can populate Default Location ID
-		# before inventory settings are validated.
 		if self._connection_settings_changed():
 			self._verify_connection()
 
 		self._seed_warehouse_mapping_if_needed()
 		self._validate_inventory_settings()
+		self._validate_old_orders_settings()
 
 	def on_update(self) -> None:
-		"""Enqueue webhook reconciliation after connection-relevant saves."""
 		if self.flags.get("ignore_webhook_sync") or not self.enabled:
 			return
 
@@ -136,11 +135,27 @@ class MedusaSettings(Document):
 				deduplicate=True,
 			)
 
+		if cint(self.sync_old_orders) and self.has_value_changed("sync_old_orders"):
+			frappe.enqueue(
+				"medusa_connector.order.sync.sync_old_orders",
+				queue="long",
+				timeout=3600,
+				enqueue_after_commit=True,
+				job_id="medusa-sync-old-orders",
+				deduplicate=True,
+			)
+			frappe.msgprint(
+				_("Order sync has been queued and will start shortly."),
+				title=_("Sync Orders"),
+				indicator="green",
+				alert=True,
+			)
+
 	# ------------------------------------------------------------------
-	# Warehouse ↔ Medusa location mapping (Shopify-style)
+	# Warehouse ↔ Medusa location mapping
 	# ------------------------------------------------------------------
 
-	def get_erpnext_to_integration_wh_mapping(self) -> dict[str, str]:
+	def get_erpnext_to_medusa_wh_mapping(self) -> dict[str, str]:
 		"""Return ``{erpnext_warehouse: medusa_location_id}`` for enabled rows."""
 		return {
 			row.erpnext_warehouse: row.medusa_location_id
@@ -148,7 +163,7 @@ class MedusaSettings(Document):
 			if row.enabled and row.erpnext_warehouse and row.medusa_location_id
 		}
 
-	def get_integration_to_erpnext_wh_mapping(self) -> dict[str, str]:
+	def get_medusa_to_erpnext_wh_mapping(self) -> dict[str, str]:
 		"""Return ``{medusa_location_id: erpnext_warehouse}`` for enabled rows."""
 		return {
 			row.medusa_location_id: row.erpnext_warehouse
@@ -156,35 +171,29 @@ class MedusaSettings(Document):
 			if row.enabled and row.erpnext_warehouse and row.medusa_location_id
 		}
 
+	# Backwards-compatible aliases (same behaviour as the Medusa-named methods).
+	get_erpnext_to_integration_wh_mapping = get_erpnext_to_medusa_wh_mapping
+	get_integration_to_erpnext_wh_mapping = get_medusa_to_erpnext_wh_mapping
+
 	def get_erpnext_warehouses(self) -> list[str]:
-		return list(self.get_erpnext_to_integration_wh_mapping().keys())
+		return list(self.get_erpnext_to_medusa_wh_mapping().keys())
 
 	@frappe.whitelist()
 	def fetch_medusa_locations(self) -> None:
-		"""Populate warehouse mapping from Medusa stock locations (Shopify pattern).
-
-		Preserves existing ERPNext warehouse links keyed by location id.
-		"""
+		"""Load Medusa stock locations into the warehouse mapping table."""
 		frappe.only_for("System Manager")
 		if not self.enabled:
-			frappe.throw(frappe._("Enable the Medusa Connector first."))
-
-		from medusa_connector.medusa.client import MedusaClient
-		from medusa_connector.medusa.exceptions import MedusaAuthError, MedusaConnectionError
+			frappe.throw(_("Please enable the Medusa Connector first."), title=_("Medusa Connector"))
 
 		try:
-			client = MedusaClient(settings=self)
-			locations = _list_all_stock_locations(client)
-		except MedusaAuthError:
-			frappe.throw(
-				frappe._("Unable to authenticate with Medusa. Please verify the Admin API Key."),
-				title=frappe._("Authentication Failed"),
-			)
-		except MedusaConnectionError as exc:
-			frappe.throw(frappe._(str(exc)), title=frappe._("Connection Failed"))
+			from medusa_connector.medusa.client import MedusaClient
+
+			locations = _list_all_stock_locations(MedusaClient(settings=self))
+		except Exception as exc:
+			_throw_medusa_api_error(exc)
 
 		if not locations:
-			frappe.msgprint(frappe._("No stock locations found on Medusa."), indicator="orange")
+			frappe.msgprint(_("No stock locations were found in Medusa."), indicator="orange")
 			return
 
 		existing_wh = {
@@ -213,21 +222,17 @@ class MedusaSettings(Document):
 				},
 			)
 
-		# Do not save — leave the form dirty so the operator maps warehouses then saves
-		# (same pattern as Shopify Settings.update_location_table).
 		frappe.msgprint(
-			frappe._("Loaded {0} Medusa stock location(s). Map ERPNext warehouses and save.").format(
-				len(self.warehouse_mapping)
-			),
+			_(
+				"Loaded {0} Medusa stock location(s). Map each location to an ERPNext warehouse and save."
+			).format(len(self.warehouse_mapping)),
 			indicator="green",
 			alert=True,
 		)
 
 	def _seed_warehouse_mapping_if_needed(self) -> None:
-		"""If inventory is on and mapping is empty, seed from defaults (migration path)."""
-		if not self.update_erpnext_stock_levels_to_medusa:
-			return
-		if self.warehouse_mapping:
+		"""Seed one mapping row from defaults when inventory is enabled and the table is empty."""
+		if not self.update_erpnext_stock_levels_to_medusa or self.warehouse_mapping:
 			return
 		if self.warehouse and self.default_location_id:
 			self.append(
@@ -240,71 +245,71 @@ class MedusaSettings(Document):
 				},
 			)
 
+	def _validate_old_orders_settings(self) -> None:
+		if not cint(self.sync_old_orders):
+			return
+
+		title = _("Sync Orders")
+		if not self.old_orders_from or not self.old_orders_to:
+			frappe.throw(_("Please set both From and To dates."), title=title)
+		if get_datetime(self.old_orders_from) > get_datetime(self.old_orders_to):
+			frappe.throw(_("From date cannot be after To date."), title=title)
+		if not self.company:
+			frappe.throw(_("Please set Company before syncing orders."), title=title)
+		if not self.warehouse:
+			frappe.throw(_("Please set Default Warehouse before syncing orders."), title=title)
+
 	def _validate_inventory_settings(self) -> None:
-		"""Require at least one valid warehouse↔location map when inventory push is on."""
 		if not self.update_erpnext_stock_levels_to_medusa:
 			return
 
-		mapping = self.get_erpnext_to_integration_wh_mapping()
+		title = _("Inventory Sync")
+		mapping = self.get_erpnext_to_medusa_wh_mapping()
 		if not mapping:
 			frappe.throw(
-				frappe._(
-					"Add at least one enabled Warehouse Mapping row (ERPNext Warehouse + Medusa Location ID). "
-					"Use Fetch Medusa Locations, then link each location to a warehouse."
+				_(
+					"Add at least one enabled Warehouse Mapping row with an ERPNext Warehouse "
+					"and Medusa Location ID. Use Fetch Medusa Locations, then map each location."
 				),
-				title=frappe._("Inventory Sync"),
+				title=title,
 			)
 
 		warehouses = list(mapping.keys())
 		locations = list(mapping.values())
 		if len(warehouses) != len(set(warehouses)):
-			frappe.throw(
-				frappe._("Each ERPNext Warehouse may appear only once in Warehouse Mapping."),
-				title=frappe._("Inventory Sync"),
-			)
+			frappe.throw(_("Each ERPNext Warehouse can only be used once in Warehouse Mapping."), title=title)
 		if len(locations) != len(set(locations)):
-			frappe.throw(
-				frappe._("Each Medusa Location may appear only once in Warehouse Mapping."),
-				title=frappe._("Inventory Sync"),
-			)
+			frappe.throw(_("Each Medusa Location can only be used once in Warehouse Mapping."), title=title)
 
 		for row in self.warehouse_mapping or []:
 			if not row.enabled:
 				continue
 			if not row.medusa_location_id:
 				frappe.throw(
-					frappe._("Medusa Location ID is required on enabled Warehouse Mapping rows."),
-					title=frappe._("Inventory Sync"),
+					_("Medusa Location ID is required on enabled Warehouse Mapping rows."),
+					title=title,
 				)
 			if not row.erpnext_warehouse:
 				frappe.throw(
-					frappe._(
-						"ERPNext Warehouse is required on enabled Warehouse Mapping rows (location {0})."
-					).format(row.medusa_location_id),
-					title=frappe._("Inventory Sync"),
+					_("ERPNext Warehouse is required for Medusa location {0}.").format(
+						row.medusa_location_id
+					),
+					title=title,
 				)
 
 	def _normalize_configured_urls(self) -> None:
+		"""Normalize Base / GraphQL URLs silently (no user alert)."""
 		if self.medusa_base_url:
 			cleaned = self._normalize_url(self.medusa_base_url)
 			if cleaned != self.medusa_base_url:
 				self.medusa_base_url = cleaned
-				frappe.msgprint(
-					frappe._("Normalized Medusa Base URL to '{0}'.").format(cleaned),
-					alert=True,
-				)
 
 		if self.graphql_url:
 			cleaned = self._normalize_url(self.graphql_url, is_graphql=True)
 			if cleaned != self.graphql_url:
 				self.graphql_url = cleaned
-				frappe.msgprint(
-					frappe._("Normalized GraphQL URL to '{0}'.").format(cleaned),
-					alert=True,
-				)
 
 	def _connection_settings_changed(self) -> bool:
-		"""True on first save or when enable / URL / mode / API key change."""
 		before = self.get_doc_before_save()
 		if not before:
 			return True
@@ -313,7 +318,7 @@ class MedusaSettings(Document):
 	def _mark_disconnected(self) -> None:
 		self.connection_status = "Disconnected"
 		self.last_connection_test = now_datetime()
-		self.last_connection_message = frappe._("Connector disabled.")
+		self.last_connection_message = _("Connector is disabled.")
 
 	def _normalize_url(self, url_str: str, is_graphql: bool = False) -> str:
 		if not url_str:
@@ -337,29 +342,16 @@ class MedusaSettings(Document):
 		return f"{scheme}://{host}"
 
 	def _verify_connection(self) -> None:
-		"""Health-check Medusa and refresh store defaults onto this doc.
-
-		Runs inside ``validate`` so a bad URL/key aborts the save instead of
-		leaving the connector marked Connected against an unreachable host.
-		"""
+		"""Health-check Medusa and refresh store defaults during validate."""
 		from medusa_connector.medusa.client import MedusaClient
-		from medusa_connector.medusa.exceptions import MedusaAuthError, MedusaConnectionError
 		from medusa_connector.utils.store_defaults import refresh_store_defaults
 
 		try:
 			client = MedusaClient(settings=self)
 			client.health_check()
 			defaults = refresh_store_defaults(client, commit=False)
-		except MedusaAuthError:
-			frappe.throw(
-				frappe._("Unable to authenticate with Medusa. Please verify the Admin API Key."),
-				title=frappe._("Authentication Failed"),
-			)
-		except MedusaConnectionError as exc:
-			frappe.throw(
-				frappe._(str(exc)),
-				title=frappe._("Connection Failed"),
-			)
+		except Exception as exc:
+			_throw_medusa_api_error(exc)
 
 		self.medusa_store_id = defaults.get("medusa_store_id") or ""
 		self.default_sales_channel_id = defaults.get("default_sales_channel_id") or ""
@@ -369,11 +361,28 @@ class MedusaSettings(Document):
 		self.last_store_defaults_sync = now_datetime()
 		self.connection_status = "Connected"
 		self.last_connection_test = now_datetime()
-		self.last_connection_message = frappe._("Connection successful ({0}).").format(client.mode)
+		self.last_connection_message = _("Connected successfully ({0}).").format(client.mode)
+
+
+def _throw_medusa_api_error(exc: Exception) -> None:
+	"""Raise a clear user-facing error for Medusa API failures."""
+	from medusa_connector.medusa.exceptions import MedusaAuthError, MedusaConnectionError
+
+	if isinstance(exc, MedusaAuthError):
+		frappe.throw(
+			_("Unable to sign in to Medusa. Please check the Admin API Key."),
+			title=_("Authentication Failed"),
+		)
+	if isinstance(exc, MedusaConnectionError):
+		frappe.throw(
+			_(str(exc)) if str(exc) else _("Could not connect to Medusa. Please check the Base URL."),
+			title=_("Connection Failed"),
+		)
+	raise exc
 
 
 def _list_all_stock_locations(client) -> list[dict]:
-	"""Paginate ``GET /admin/stock-locations``."""
+	"""Paginate Medusa stock locations."""
 	locations: list[dict] = []
 	offset, limit = 0, 100
 	while True:
@@ -389,7 +398,7 @@ def _list_all_stock_locations(client) -> list[dict]:
 
 @frappe.whitelist()
 def sync_webhooks() -> dict:
-	"""Manually reconcile webhooks now (button on the settings form)."""
+	"""Reconcile Medusa webhooks with the current settings."""
 	from medusa_connector.medusa.webhook_sync import WebhookSyncService
 
 	return WebhookSyncService().sync()
@@ -397,17 +406,17 @@ def sync_webhooks() -> dict:
 
 @frappe.whitelist()
 def regenerate_webhook_secret() -> str:
-	"""Generate a fresh HMAC/token secret. Invalidates the current registration."""
+	"""Generate a new webhook secret. Re-sync webhooks after this change."""
 	doc = frappe.get_single("Medusa Settings")
 	doc.webhook_secret = secrets.token_urlsafe(32)
 	doc.save()
 	frappe.db.commit()
-	return frappe._("Webhook secret regenerated. Re-sync webhooks to push it to Medusa.")
+	return _("Webhook secret updated. Please sync webhooks to apply it in Medusa.")
 
 
 @frappe.whitelist()
 def test_connection() -> dict:
-	"""Desk button: probe Medusa, refresh store defaults, return status."""
+	"""Test the Medusa connection and refresh store defaults."""
 	from medusa_connector.medusa.client import test_connection as _test
 
 	return _test()
@@ -415,23 +424,23 @@ def test_connection() -> dict:
 
 @frappe.whitelist()
 def refresh_store_defaults() -> dict:
-	"""Desk button: re-fetch store defaults without a full connection lifecycle."""
+	"""Re-fetch store defaults from Medusa."""
 	frappe.only_for("System Manager")
 	from medusa_connector.utils.store_defaults import refresh_store_defaults as _refresh
 
 	if not frappe.db.get_single_value("Medusa Settings", "enabled"):
-		frappe.throw(frappe._("Enable the Medusa Connector first."))
+		frappe.throw(_("Please enable the Medusa Connector first."), title=_("Medusa Connector"))
 	defaults = _refresh(commit=True)
 	return {
 		"ok": True,
-		"message": frappe._("Store defaults refreshed."),
+		"message": _("Store defaults updated."),
 		"defaults": defaults,
 	}
 
 
 @frappe.whitelist()
 def sync_inventory_now() -> dict:
-	"""Desk button: force ERPNext → Medusa inventory push once."""
+	"""Push ERPNext stock levels to Medusa once."""
 	from medusa_connector.product.inventory_export import sync_inventory_now as _sync
 
 	return _sync()

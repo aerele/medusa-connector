@@ -1,14 +1,13 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
 
-"""Medusa → ERPNext Sales Order sync (Shopify / Ecommerce Core pattern).
+"""Medusa → ERPNext order sync (Ecommerce Core).
 
-Flow (same as Shopify ``sync_sales_order``):
-  1. Skip if Sales Order already exists for ``medusa_order_id``
-  2. ``ensure_order_customer`` (EcommerceCustomer for Customer / Address / Contact)
-  3. Ensure line items are mapped (import product if missing)
-  4. Create and submit Sales Order
-  5. Optionally create Sales Invoice when payment is captured
+Full lifecycle (not SO-only):
+
+  1. Ensure Customer / Address / Contact and Items
+  2. Create Sales Order if missing (idempotent on ``medusa_order_id``)
+  3. Apply current Medusa state → SI/PE (paid), DN (fulfillments), cancel, status
 
 Logging uses **Ecommerce Integration Log** via ``create_medusa_log``.
 """
@@ -38,9 +37,9 @@ from medusa_connector.utils.logging import create_medusa_log
 
 
 def sync_sales_order(order: dict, request_id: str | None = None) -> str | None:
-	"""Create an ERPNext Sales Order from a Medusa order payload.
+	"""Ensure Sales Order exists and apply the full Medusa order lifecycle.
 
-	Idempotent on ``medusa_order_id``. Safe for webhooks and bulk/old-order sync.
+	Idempotent on ``medusa_order_id``. Safe for webhooks and bulk Sync Orders.
 	Returns Sales Order name on success, ``None`` when skipped/failed.
 	"""
 	frappe.set_user("Administrator")
@@ -68,31 +67,40 @@ def sync_sales_order(order: dict, request_id: str | None = None) -> str | None:
 		return None
 
 	existing = frappe.db.get_value("Sales Order", {ORDER_ID_FIELD: order_id}, "name")
-	if existing:
-		# Refresh status field if present; do not recreate.
-		_update_order_status_fields(order)
-		create_medusa_log(
-			status="Invalid",
-			message=_("Sales Order {0} already exists for Medusa order {1}.").format(existing, order_id),
-			request_data={"order_id": order_id, "sales_order": existing},
-			method="medusa_connector.order.sync.sync_sales_order",
-		)
-		return existing
+	created = False
 
 	try:
-		ensure_order_customer(order, settings=settings)
-		ensure_order_items(order)
-		so = create_order(order, settings)
+		if existing:
+			so = frappe.get_doc("Sales Order", existing)
+		else:
+			ensure_order_customer(order, settings=settings)
+			ensure_order_items(order)
+			so = create_sales_order(order, settings)
+			if not so:
+				return None
+			created = True
+
+		# Reload after create so per_billed / docstatus are current
+		so = frappe.get_doc("Sales Order", so.name)
+		lifecycle = apply_order_lifecycle(order, so, settings)
+
 		create_medusa_log(
 			status="Success",
-			message=_("Created Sales Order {0} for Medusa order {1}.").format(
-				so.name if so else "-", order_id
+			message=_("{0} Sales Order {1} for Medusa order {2}; lifecycle: {3}.").format(
+				_("Created") if created else _("Synced"),
+				so.name,
+				order_id,
+				_lifecycle_summary(lifecycle),
 			),
 			request_data={"order_id": order_id, "display_id": order.get("display_id")},
-			response_data={"sales_order": so.name if so else None},
+			response_data={
+				"sales_order": so.name,
+				"created": created,
+				"lifecycle": lifecycle,
+			},
 			method="medusa_connector.order.sync.sync_sales_order",
 		)
-		return so.name if so else None
+		return so.name
 	except Exception as exc:
 		create_medusa_log(
 			status="Error",
@@ -105,17 +113,95 @@ def sync_sales_order(order: dict, request_id: str | None = None) -> str | None:
 
 
 def create_order(order: dict, settings, company: str | None = None):
-	"""Create Sales Order (and optional Sales Invoice when paid)."""
-	from medusa_connector.order.invoice import create_sales_invoice
+	"""Create Sales Order then apply payment / fulfillment / cancel lifecycle.
 
+	Mirrors Shopify ``create_order`` for brand-new orders.
+	"""
 	so = create_sales_order(order, settings, company=company)
 	if not so:
 		return None
-
-	if _is_paid(order) and cint(settings.get("sync_sales_invoice")):
-		create_sales_invoice(order, settings, so)
-
+	apply_order_lifecycle(order, so, settings)
 	return so
+
+
+def apply_order_lifecycle(order: dict, sales_order, settings) -> dict[str, Any]:
+	"""Project Medusa order state onto ERPNext documents linked to ``sales_order``.
+
+	Does not recreate the Sales Order. Steps (each idempotent / best-effort):
+
+	1. Refresh status custom fields (SO / SI / DN)
+	2. If paid/captured → Sales Invoice + Payment Entry (settings)
+	3. Fulfillments → Delivery Notes; canceled fulfillments → cancel DNs
+	4. If order canceled → cancel SO when safe (else status only)
+	5. Refunded / partially_refunded → status stamp (credit-note path pending)
+
+	Returns a dict describing actions taken for logging.
+	"""
+	from medusa_connector.order.fulfillment import sync_fulfillments_for_order
+	from medusa_connector.order.invoice import create_sales_invoice
+
+	result: dict[str, Any] = {
+		"sales_invoice": None,
+		"delivery_notes": [],
+		"canceled_fulfillments": [],
+		"order_canceled": False,
+		"payment_status": cstr(order.get("payment_status") or ""),
+		"fulfillment_status": cstr(order.get("fulfillment_status") or ""),
+		"order_status": cstr(order.get("status") or ""),
+		"errors": [],
+	}
+
+	if not sales_order:
+		return result
+
+	order_id = cstr(order.get("id") or "")
+	update_order_status_fields(order)
+
+	# Cancelled ERPNext SO: only refresh status; do not create SI/DN.
+	sales_order = frappe.get_doc("Sales Order", sales_order.name)
+	if sales_order.docstatus == 2:
+		result["skipped"] = "sales_order_cancelled"
+		return result
+
+	# --- Payment → SI + PE -------------------------------------------------
+	if sales_order.docstatus == 1 and _is_paid(order) and cint(settings.get("sync_sales_invoice")):
+		try:
+			sales_order = frappe.get_doc("Sales Order", sales_order.name)
+			payment_id = _primary_captured_payment_id(order)
+			si_name = create_sales_invoice(order, settings, sales_order, payment_id=payment_id)
+			result["sales_invoice"] = si_name
+		except Exception as exc:
+			result["errors"].append(f"invoice: {exc}")
+			frappe.logger("medusa_connector").warning(f"Lifecycle SI failed for order {order_id}: {exc}")
+
+	# --- Fulfillment / shipment → DN --------------------------------------
+	if sales_order.docstatus == 1 and cint(settings.get("sync_delivery_note")):
+		try:
+			sales_order = frappe.get_doc("Sales Order", sales_order.name)
+			ful_result = sync_fulfillments_for_order(order, settings, sales_order)
+			result["delivery_notes"] = ful_result.get("delivery_notes") or []
+			result["canceled_fulfillments"] = ful_result.get("canceled") or []
+		except Exception as exc:
+			result["errors"].append(f"fulfillment: {exc}")
+			frappe.logger("medusa_connector").warning(f"Lifecycle DN failed for order {order_id}: {exc}")
+
+	# --- Order cancellation -----------------------------------------------
+	if _is_canceled(order):
+		try:
+			# Quiet cancel — bulk Sync Orders should not emit a second log per order
+			canceled = _cancel_sales_order_if_safe(order, sales_order.name)
+			result["order_canceled"] = canceled
+			update_order_status_fields(order)
+		except Exception as exc:
+			result["errors"].append(f"cancel: {exc}")
+			frappe.logger("medusa_connector").warning(f"Lifecycle cancel failed for order {order_id}: {exc}")
+
+	# --- Refunds (status only until credit-note flow exists) --------------
+	if _is_refunded(order):
+		update_order_status_fields(order)
+		result["refund_status"] = cstr(order.get("payment_status") or "refunded")
+
+	return result
 
 
 def create_sales_order(order: dict, settings, company: str | None = None):
@@ -253,7 +339,7 @@ def get_item_code(line_item: dict) -> str | None:
 
 
 def ensure_order_items(order: dict) -> None:
-	"""Import missing Medusa products for order lines (Shopify create_items_if_not_exist)."""
+	"""Import missing Medusa products for order lines (auto product import for order lines)."""
 	from medusa_connector.medusa.product import ProductService
 	from medusa_connector.product.mapper import ProductMapper
 	from medusa_connector.product.sync import ProductSync
@@ -409,61 +495,157 @@ def get_sales_order(order_id: str):
 	return None
 
 
-def sync_old_orders(
-	*,
-	from_date=None,
-	to_date=None,
-	force: bool = False,
-) -> dict:
-	"""Fetch Medusa orders in a date range and sync each (for future Sync Old Orders UI).
+def sync_old_orders() -> dict | None:
+	"""Bulk Sync Orders job (scheduled / on save).
 
-	Skips orders that already exist unless the caller re-runs after cancel/delete.
+	Reads ``sync_old_orders``, ``old_orders_from``, ``old_orders_to`` from
+	Medusa Settings. For each order in range, applies the **full lifecycle**
+	(SO + payment + fulfillment + cancel/status), not create-only.
+
+	After the run finishes, clears the ``sync_old_orders`` checkbox.
+	"""
+	settings = frappe.get_single(SETTING_DOCTYPE)
+	if not settings.enabled or not cint(settings.get("sync_old_orders")):
+		return None
+
+	from_date = settings.get("old_orders_from")
+	to_date = settings.get("old_orders_to")
+	if not from_date or not to_date:
+		create_medusa_log(
+			status="Invalid",
+			message=_("Sync Orders is enabled but From/To dates are missing."),
+			method="medusa_connector.order.sync.sync_old_orders",
+			make_new=True,
+		)
+		_clear_sync_old_orders_flag()
+		return {"synced": 0, "created": 0, "failed": 0, "status": "Invalid"}
+
+	result = _run_old_orders_sync(from_date, to_date)
+	_clear_sync_old_orders_flag()
+	return result
+
+
+# Public alias — preferred name for the full-lifecycle bulk job
+sync_orders = sync_old_orders
+
+
+def _run_old_orders_sync(from_date, to_date, *, force: bool = False) -> dict:
+	"""Core date-range loop: full lifecycle sync for every order in range.
+
+	``force`` is retained for callers; existing Sales Orders are **not** skipped —
+	lifecycle catch-up (SI/DN/cancel/status) always runs.
 	"""
 	from medusa_connector.medusa.order import OrderService
 
-	settings = frappe.get_doc(SETTING_DOCTYPE)
-	if not settings.enabled:
-		frappe.throw(_("Enable the Medusa Connector first."))
-
-	created_at_gt = None
-	created_at_lt = None
-	if from_date:
-		created_at_gt = get_datetime(from_date).isoformat()
-	if to_date:
-		created_at_lt = get_datetime(to_date).isoformat()
+	from_iso = _to_iso_z(from_date)
+	to_iso = _to_iso_z(to_date)
 
 	service = OrderService()
 	synced = 0
-	skipped = 0
+	created = 0
 	failed = 0
+	processed = 0
 
-	for order in service.iter_orders(created_at_gt=created_at_gt, created_at_lt=created_at_lt):
-		order_id = cstr(order.get("id") or "")
-		if not order_id:
-			continue
-		if not force and frappe.db.exists("Sales Order", {ORDER_ID_FIELD: order_id}):
-			skipped += 1
-			continue
-		# Re-fetch full order for line items / addresses
-		full = service.get_order(order_id) or order
-		log = create_medusa_log(
-			status="Queued",
-			method="medusa_connector.order.sync.sync_sales_order",
-			message=_("Sync old order {0}").format(order_id),
-			request_data={"order_id": order_id},
-			make_new=True,
-		)
-		result = sync_sales_order(full, request_id=log.name)
-		if result:
-			synced += 1
-		else:
-			# Invalid (already exists) counts as skip; Error counted as failed via log
-			if frappe.db.exists("Sales Order", {ORDER_ID_FIELD: order_id}):
-				skipped += 1
+	parent_log = create_medusa_log(
+		status="Queued",
+		method="medusa_connector.order.sync.sync_old_orders",
+		message=_("Syncing Medusa orders (full lifecycle) from {0} to {1}").format(from_iso, to_iso),
+		request_data={"from": from_iso, "to": to_iso, "full_lifecycle": True},
+		make_new=True,
+	)
+	parent_log_name = getattr(parent_log, "name", None) or cstr(parent_log)
+
+	try:
+		for order in service.iter_orders(created_at_gte=from_iso, created_at_lte=to_iso):
+			order_id = cstr(order.get("id") or "")
+			if not order_id:
+				continue
+			processed += 1
+			had_so = bool(frappe.db.exists("Sales Order", {ORDER_ID_FIELD: order_id}))
+
+			# Full Admin order: items, addresses, fulfillments, payment collections
+			full = service.get_order(order_id) or order
+			log = create_medusa_log(
+				status="Queued",
+				method="medusa_connector.order.sync.sync_sales_order",
+				message=_("Sync order {0} (lifecycle)").format(order_id),
+				request_data={
+					"order_id": order_id,
+					"bulk": True,
+					"payment_status": full.get("payment_status"),
+					"fulfillment_status": full.get("fulfillment_status"),
+					"status": full.get("status"),
+				},
+				make_new=True,
+			)
+			log_name = getattr(log, "name", None) or cstr(log)
+			result = sync_sales_order(full, request_id=log_name)
+			if result:
+				synced += 1
+				if not had_so:
+					created += 1
 			else:
 				failed += 1
 
-	return {"synced": synced, "skipped": skipped, "failed": failed}
+		summary = {
+			"synced": synced,
+			"created": created,
+			"updated": max(synced - created, 0),
+			"failed": failed,
+			"processed": processed,
+			"from": from_iso,
+			"to": to_iso,
+			"full_lifecycle": True,
+		}
+		frappe.flags.request_id = parent_log_name
+		create_medusa_log(
+			status="Success" if not failed else "Error",
+			message=_(
+				"Order sync finished: {0} synced ({1} new SO, {2} updated), {3} failed ({4} in range)."
+			).format(synced, created, max(synced - created, 0), failed, processed),
+			response_data=summary,
+			method="medusa_connector.order.sync.sync_old_orders",
+		)
+		return summary
+	except Exception as exc:
+		frappe.flags.request_id = parent_log_name
+		create_medusa_log(
+			status="Error",
+			exception=exc,
+			method="medusa_connector.order.sync.sync_old_orders",
+			request_data={"from": from_iso, "to": to_iso},
+		)
+		return {
+			"synced": synced,
+			"created": created,
+			"failed": failed + 1,
+			"processed": processed,
+		}
+
+
+def _clear_sync_old_orders_flag() -> None:
+	"""Turn off Sync Old Orders after a run (standard behaviour)."""
+	try:
+		doc = frappe.get_doc(SETTING_DOCTYPE)
+		if not cint(doc.sync_old_orders):
+			return
+		doc.sync_old_orders = 0
+		doc.flags.ignore_mandatory = True
+		doc.flags.ignore_webhook_sync = True
+		doc.flags.ignore_permissions = True
+		doc.save(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		# Ensure the flag is cleared even if full save fails
+		frappe.db.set_single_value(SETTING_DOCTYPE, "sync_old_orders", 0)
+		frappe.db.commit()
+
+
+def _to_iso_z(value) -> str:
+	"""Normalize datetime for Medusa Admin filters (ISO-8601)."""
+	dt = get_datetime(value)
+	# Medusa accepts ISO timestamps; keep naive as UTC-ish string without timezone issues.
+	return dt.isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -667,6 +849,69 @@ def _is_paid(order: dict) -> bool:
 	return status in {"captured", "paid"}
 
 
+def _is_canceled(order: dict) -> bool:
+	status = cstr(order.get("status") or "").lower()
+	return status in {"canceled", "cancelled"}
+
+
+def _is_refunded(order: dict) -> bool:
+	status = cstr(order.get("payment_status") or "").lower()
+	return status in {"refunded", "partially_refunded"}
+
+
+def _primary_captured_payment_id(order: dict) -> str | None:
+	"""First captured payment id from order.payment_collections (Medusa v2)."""
+	for collection in order.get("payment_collections") or []:
+		if not isinstance(collection, dict):
+			continue
+		for payment in collection.get("payments") or []:
+			if not isinstance(payment, dict):
+				continue
+			pid = cstr(payment.get("id") or "")
+			if not pid:
+				continue
+			# Prefer explicitly captured payments
+			if payment.get("captured_at") or cstr(payment.get("status") or "").lower() == "captured":
+				return pid
+		# Fallback: first payment on a completed collection
+		if cstr(collection.get("status") or "").lower() in {"completed", "captured"}:
+			for payment in collection.get("payments") or []:
+				if isinstance(payment, dict) and payment.get("id"):
+					return cstr(payment.get("id"))
+	return None
+
+
+def _cancel_sales_order_if_safe(order: dict, sales_order_name: str) -> bool:
+	"""Cancel SO when Medusa order is canceled and no SI/DN blocks it.
+
+	Returns True if SO was cancelled, False if only status was stamped.
+	Does not write integration logs (caller / cancel_order handle logging).
+	"""
+	order_id = cstr(order.get("id") or "")
+	if not sales_order_name or not frappe.db.exists("Sales Order", sales_order_name):
+		return False
+
+	so = frappe.get_doc("Sales Order", sales_order_name)
+	status_label = _status_label(order)
+
+	si = frappe.db.get_value("Sales Invoice", {ORDER_ID_FIELD: order_id}, "name")
+	dns = frappe.get_all("Delivery Note", filters={ORDER_ID_FIELD: order_id}, pluck="name")
+
+	if si:
+		frappe.db.set_value("Sales Invoice", si, ORDER_STATUS_FIELD, status_label, update_modified=False)
+	for dn in dns:
+		frappe.db.set_value("Delivery Note", dn, ORDER_STATUS_FIELD, status_label, update_modified=False)
+
+	if not si and not dns and so.docstatus == 1:
+		so.cancel()
+		return True
+
+	frappe.db.set_value(
+		"Sales Order", sales_order_name, ORDER_STATUS_FIELD, status_label, update_modified=False
+	)
+	return False
+
+
 def _status_label(order: dict) -> str:
 	parts = [
 		cstr(order.get("status") or ""),
@@ -676,8 +921,30 @@ def _status_label(order: dict) -> str:
 	return " / ".join(p for p in parts if p)[:140]
 
 
+def _lifecycle_summary(lifecycle: dict | None) -> str:
+	if not lifecycle:
+		return "-"
+	bits = []
+	if lifecycle.get("sales_invoice"):
+		bits.append(f"SI={lifecycle['sales_invoice']}")
+	dns = lifecycle.get("delivery_notes") or []
+	if dns:
+		bits.append(f"DNx{len(dns)}")
+	if lifecycle.get("order_canceled"):
+		bits.append("SO cancelled")
+	if lifecycle.get("refund_status"):
+		bits.append(f"refund={lifecycle['refund_status']}")
+	if lifecycle.get("errors"):
+		bits.append(f"errors={len(lifecycle['errors'])}")
+	ps = lifecycle.get("payment_status")
+	fs = lifecycle.get("fulfillment_status")
+	if ps or fs:
+		bits.append(f"state={ps or '-'}/{fs or '-'}")
+	return ", ".join(bits) if bits else "status only"
+
+
 def update_order_status_fields(order: dict) -> None:
-	"""Refresh Medusa status custom field on linked SO / SI."""
+	"""Refresh Medusa status custom field on linked SO / SI / DN."""
 	order_id = cstr(order.get("id") or "")
 	if not order_id:
 		return
@@ -688,6 +955,8 @@ def update_order_status_fields(order: dict) -> None:
 	si = frappe.db.get_value("Sales Invoice", {ORDER_ID_FIELD: order_id}, "name")
 	if si:
 		frappe.db.set_value("Sales Invoice", si, ORDER_STATUS_FIELD, label, update_modified=False)
+	for dn in frappe.get_all("Delivery Note", filters={ORDER_ID_FIELD: order_id}, pluck="name"):
+		frappe.db.set_value("Delivery Note", dn, ORDER_STATUS_FIELD, label, update_modified=False)
 
 
 # Back-compat alias used during development
