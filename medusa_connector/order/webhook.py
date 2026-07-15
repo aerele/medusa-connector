@@ -18,6 +18,7 @@ def _full_order(entity: dict, event: MedusaEvent) -> dict:
 	"""Prefer hydrated Admin order; re-fetch when payload is thin."""
 	order = entity if isinstance(entity, dict) else {}
 	order_id = cstr(order.get("id") or event.entity_id or "")
+
 	# Thin webhook body often only has id — always re-fetch for SO create.
 	if order_id and (not order.get("items") or not order.get("customer_id")):
 		fetched = OrderService().get_order(order_id)
@@ -210,6 +211,20 @@ class PaymentHandler(BaseHandler):
 		entity = entity if isinstance(entity, dict) else {}
 		payment_id = cstr(entity.get("id") or event.entity_id or "")
 
+		if event.name == "payment.refunded":
+			from medusa_connector.order.refund import process_refund
+
+			result = process_refund(
+				payment_id=payment_id or None,
+				request_id=event.log_name,
+			)
+			return (
+				f"{event.name}: {result.get('status')} refund={result.get('refund_id') or '-'} "
+				f"payment={payment_id} order={result.get('order_id') or '-'} "
+				f"SI={result.get('sales_invoice') or '-'} PE={result.get('payment_entry') or '-'} "
+				f"— {result.get('message') or ''}"
+			).strip()
+
 		try:
 			payment_service = PaymentService()
 			order_id = payment_service.resolve_order_id(entity, payment_id=payment_id)
@@ -243,8 +258,6 @@ class PaymentHandler(BaseHandler):
 				f"{event.name}: SO {so_name} (invoice skipped or already billed; "
 				f"payment {payment_id}, order {order_id})"
 			)
-		if event.name == "payment.refunded":
-			return f"{event.name}: payment {payment_id} order {order_id} (refund sync pending)"
 		return f"{event.name}: payment {payment_id} order {order_id}"
 
 

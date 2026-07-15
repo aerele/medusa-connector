@@ -31,6 +31,10 @@ ORDER_STATUS_FIELD = "medusa_order_status"
 ORDER_ITEM_DISCOUNT_FIELD = "medusa_item_discount"
 # One Delivery Note per Medusa fulfillment (Shopify-style ship-unit key).
 FULFILLMENT_ID_FIELD = "medusa_fulfillment_id"
+# Idempotency key linking a refunded Medusa payment to the reversed ERPNext
+# documents (Payment Entry + Sales Invoice). Stamped when a refund is applied
+# so a re-delivered ``payment.refunded`` webhook does not double-process.
+REFUND_ID_FIELD = "medusa_refund_id"
 
 # Admin API field expand for full order hydration (items, addresses, shipping, fulfillments).
 DEFAULT_ORDER_FIELDS = (

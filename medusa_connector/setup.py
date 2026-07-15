@@ -15,6 +15,7 @@ from medusa_connector.constants import (
 	ORDER_ITEM_DISCOUNT_FIELD,
 	ORDER_NUMBER_FIELD,
 	ORDER_STATUS_FIELD,
+	REFUND_ID_FIELD,
 )
 
 
@@ -60,6 +61,26 @@ def _order_status_field(insert_after: str) -> dict:
 	}
 
 
+def _refund_id_field(insert_after: str) -> dict:
+	"""Idempotency key stamped when a Medusa refund reverses an SI / PE.
+
+	Only set on documents reversed for a refund, so a re-delivered
+	``payment.refunded`` webhook never double-processes the same refund.
+	"""
+	return {
+		"fieldname": REFUND_ID_FIELD,
+		"label": "Medusa Refund ID",
+		"fieldtype": "Data",
+		"insert_after": insert_after,
+		"read_only": 1,
+		"print_hide": 1,
+		"translatable": 0,
+		"no_copy": 1,
+		"in_standard_filter": 1,
+		"search_index": 1,
+	}
+
+
 def setup_custom_fields(update: bool = True) -> None:
 	"""Ensure identity custom fields for Customer, Address, and sales documents.
 
@@ -100,6 +121,7 @@ def setup_custom_fields(update: bool = True) -> None:
 			_order_id_field("naming_series"),
 			_order_number_field(ORDER_ID_FIELD),
 			_order_status_field(ORDER_NUMBER_FIELD),
+			_refund_id_field(ORDER_STATUS_FIELD),
 		],
 		"Delivery Note": [
 			_order_id_field("naming_series"),
@@ -128,6 +150,21 @@ def setup_custom_fields(update: bool = True) -> None:
 				"print_hide": 1,
 				"no_copy": 1,
 			},
+		],
+		"Payment Entry": [
+			{
+				"fieldname": ORDER_ID_FIELD,
+				"label": "Medusa Order ID",
+				"fieldtype": "Data",
+				"insert_after": "reference_no",
+				"read_only": 1,
+				"print_hide": 1,
+				"translatable": 0,
+				"no_copy": 1,
+				"in_standard_filter": 1,
+				"search_index": 1,
+			},
+			_refund_id_field(ORDER_ID_FIELD),
 		],
 	}
 	create_custom_fields(custom_fields, update=update)

@@ -37,7 +37,7 @@ def create_sales_invoice(
 		# SI already exists — still try PE if outstanding and payment not yet recorded.
 		si = frappe.get_doc("Sales Invoice", existing_si)
 		posting_date = getdate(order.get("created_at")) or nowdate()
-		_ensure_payment_entry(si, settings, posting_date, payment_id=payment_id)
+		_ensure_payment_entry(si, settings, posting_date, payment_id=payment_id, order_id=order_id)
 		return existing_si
 
 	if sales_order.docstatus != 1 or flt_safe(sales_order.per_billed) >= 100:
@@ -64,7 +64,7 @@ def create_sales_invoice(
 	si.insert(ignore_permissions=True, ignore_mandatory=True)
 	si.submit()
 
-	_ensure_payment_entry(si, settings, posting_date, payment_id=payment_id)
+	_ensure_payment_entry(si, settings, posting_date, payment_id=payment_id, order_id=order_id)
 
 	return si.name
 
@@ -75,6 +75,7 @@ def _ensure_payment_entry(
 	posting_date,
 	*,
 	payment_id: str | None = None,
+	order_id: str | None = None,
 ) -> str | None:
 	"""Create Payment Entry against SI if needed; skip when already paid or PE exists."""
 	if not settings.get("cash_bank_account"):
@@ -98,11 +99,13 @@ def _ensure_payment_entry(
 	if existing_pe:
 		return existing_pe
 
-	return _make_payment_entry(sales_invoice, settings, posting_date, reference_no=reference_no)
+	return _make_payment_entry(
+		sales_invoice, settings, posting_date, reference_no=reference_no, order_id=order_id
+	)
 
 
 def _make_payment_entry(
-	sales_invoice, settings, posting_date, *, reference_no: str | None = None
+	sales_invoice, settings, posting_date, *, reference_no: str | None = None, order_id: str | None = None
 ) -> str | None:
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
@@ -115,6 +118,9 @@ def _make_payment_entry(
 	pe.reference_no = cstr(reference_no or sales_invoice.name)
 	pe.posting_date = posting_date or nowdate()
 	pe.reference_date = posting_date or nowdate()
+	# Stamp Medusa order id so the refund workflow can locate this PE by order.
+	if order_id and frappe.get_meta("Payment Entry").has_field(ORDER_ID_FIELD):
+		pe.set(ORDER_ID_FIELD, order_id)
 	pe.insert(ignore_permissions=True)
 	pe.submit()
 	return pe.name

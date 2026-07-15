@@ -299,6 +299,54 @@ def cancel_fulfillment_delivery_note(
 		)
 
 
+def cancel_order_delivery_notes(
+	order_id: str, *, status_label: str | None = None, request_id: str | None = None
+) -> dict[str, Any]:
+	"""Cancel every Delivery Note linked to a Medusa order.
+
+	Used by the order-cancellation flow so that inventory booked out by
+	fulfilled shipments is restored via ERPNext's standard DN cancellation
+	(a cancelled DN reverses its stock ledger entry). Best-effort: a DN that
+	cannot be cancelled (e.g. linked to a submitted stock reconciliation) is
+	reported in ``failed`` rather than aborting the whole cancellation.
+
+	Returns ``{canceled, deleted, skipped, failed, order_id}``.
+	"""
+	result: dict[str, Any] = {
+		"canceled": [],
+		"deleted": [],
+		"skipped": [],
+		"failed": [],
+		"order_id": cstr(order_id),
+	}
+	order_id = cstr(order_id)
+	if not order_id:
+		return result
+
+	dn_names = frappe.get_all("Delivery Note", filters={ORDER_ID_FIELD: order_id}, pluck="name")
+	for dn_name in dn_names:
+		try:
+			dn = frappe.get_doc("Delivery Note", dn_name)
+			if status_label:
+				frappe.db.set_value(
+					"Delivery Note", dn_name, ORDER_STATUS_FIELD, status_label, update_modified=False
+				)
+			if dn.docstatus == 1:
+				dn.cancel()
+				result["canceled"].append(dn_name)
+			elif dn.docstatus == 0:
+				dn.delete(ignore_permissions=True)
+				result["deleted"].append(dn_name)
+			else:
+				result["skipped"].append(dn_name)
+		except Exception as exc:
+			result["failed"].append(dn_name)
+			frappe.logger("medusa_connector").warning(
+				f"Could not cancel Delivery Note {dn_name} for order {order_id}: {exc}"
+			)
+	return result
+
+
 def update_fulfillment_tracking(
 	*,
 	fulfillment_id: str,

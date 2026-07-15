@@ -188,7 +188,12 @@ def apply_order_lifecycle(order: dict, sales_order, settings) -> dict[str, Any]:
 	# --- Order cancellation -----------------------------------------------
 	if _is_canceled(order):
 		try:
-			# Quiet cancel — bulk Sync Orders should not emit a second log per order
+			from medusa_connector.order.fulfillment import cancel_order_delivery_notes
+
+			# Cancel Delivery Notes first (restore inventory), then the SO when allowed.
+			# Quiet — bulk Sync Orders should not emit a second log per order.
+			dn_result = cancel_order_delivery_notes(order_id, status_label=_status_label(order))
+			result["canceled_delivery_notes"] = dn_result.get("canceled") or []
 			canceled = _cancel_sales_order_if_safe(order, sales_order.name)
 			result["order_canceled"] = canceled
 			update_order_status_fields(order)
@@ -434,7 +439,22 @@ def get_tax_account(tax: dict, *, charge_type: str, settings) -> str:
 
 
 def cancel_order(order: dict, request_id: str | None = None) -> str | None:
-	"""Cancel Sales Order when Medusa order is canceled (if not invoiced/delivered)."""
+	"""Handle ``order.canceled`` following ERPNext's standard document lifecycle.
+
+	The Sales Order is the hub. On Medusa order cancellation we:
+
+	1. Cancel every linked Delivery Note (restores inventory via ERPNext's
+	   stock-ledger reversal), best-effort so one bad DN does not abort the rest.
+	2. Cancel the Sales Order when ERPNext permits it — i.e. when no submitted
+	   Sales Invoice keeps it linked. If a submitted SI exists it is left intact
+	   (the separate ``payment.refunded`` workflow reverses SI + Payment Entry),
+	   and the cancellation is recorded on the status field.
+
+	This decouples order cancellation from payment refund, mirroring Medusa's
+	separate ``order.canceled`` and ``payment.refunded`` events.
+	"""
+	from medusa_connector.order.fulfillment import cancel_order_delivery_notes
+
 	frappe.set_user("Administrator")
 	if request_id:
 		frappe.flags.request_id = request_id
@@ -452,27 +472,56 @@ def cancel_order(order: dict, request_id: str | None = None) -> str | None:
 			return None
 
 		so = frappe.get_doc("Sales Order", so_name)
+		payment_status = cstr(order.get("payment_status") or "")
+
+		if payment_status == "refunded":
+			from medusa_connector.order.refund import process_refund
+
+			payment_id = _get_payment_id(order)
+
+			if payment_id:
+				process_refund(
+					payment_id=payment_id,
+					request_id=request_id,
+				)
+
 		status_label = _status_label(order)
 
-		si = frappe.db.get_value("Sales Invoice", {ORDER_ID_FIELD: order_id}, "name")
-		dns = frappe.get_all("Delivery Note", filters={ORDER_ID_FIELD: order_id}, pluck="name")
+		# 1) Cancel linked Delivery Notes first so inventory is restored and they
+		#    no longer keep the Sales Order linked (ERPNext blocks SO cancel while
+		#    submitted DNs exist).
+		dn_result = cancel_order_delivery_notes(order_id, status_label=status_label, request_id=request_id)
 
+		# 2) Refresh status on any submitted Sales Invoice (left for the refund flow).
+		si = frappe.db.get_value("Sales Invoice", {ORDER_ID_FIELD: order_id, "docstatus": 1}, "name")
 		if si:
-			frappe.db.set_value("Sales Invoice", si, ORDER_STATUS_FIELD, status_label)
-		for dn in dns:
-			frappe.db.set_value("Delivery Note", dn, ORDER_STATUS_FIELD, status_label)
+			frappe.db.set_value("Sales Invoice", si, ORDER_STATUS_FIELD, status_label, update_modified=False)
 
-		if not si and not dns and so.docstatus == 1:
-			so.cancel()
-			msg = _("Cancelled Sales Order {0}.").format(so_name)
+		# 3) Cancel the Sales Order when ERPNext allows it.
+		canceled_so = _cancel_sales_order_if_safe(order, so_name)
+
+		if canceled_so:
+			msg = _("Cancelled Sales Order {0} for Medusa order {1} (Delivery Notes canceled: {2}).").format(
+				so_name, order_id, len(dn_result.get("canceled") or [])
+			)
+		elif so.docstatus == 2:
+			msg = _("Sales Order {0} already cancelled for Medusa order {1}.").format(so_name, order_id)
 		else:
-			frappe.db.set_value("Sales Order", so_name, ORDER_STATUS_FIELD, status_label)
-			msg = _("Updated status on Sales Order {0} (linked docs prevent cancel).").format(so_name)
+			msg = _(
+				"Medusa order {1} cancelled: Delivery Notes canceled ({2}); Sales Order {0} kept "
+				"(a submitted Sales Invoice keeps it linked — refund workflow will reverse it)."
+			).format(so_name, order_id, len(dn_result.get("canceled") or []))
 
 		create_medusa_log(
 			status="Success",
 			message=msg,
 			request_data={"order_id": order_id},
+			response_data={
+				"sales_order": so_name,
+				"sales_order_canceled": canceled_so,
+				"delivery_notes": dn_result,
+				"sales_invoice": si,
+			},
 			method="medusa_connector.order.sync.cancel_order",
 		)
 		return so_name
@@ -485,6 +534,17 @@ def cancel_order(order: dict, request_id: str | None = None) -> str | None:
 			method="medusa_connector.order.sync.cancel_order",
 		)
 		return None
+
+
+def _get_payment_id(order: dict) -> str | None:
+	"""Return the first payment ID from a Medusa order."""
+	for collection in order.get("payment_collections") or []:
+		for payment in collection.get("payments") or []:
+			payment_id = cstr(payment.get("id"))
+			if payment_id:
+				return payment_id
+
+	return None
 
 
 def get_sales_order(order_id: str):
@@ -878,9 +938,13 @@ def _primary_captured_payment_id(order: dict) -> str | None:
 
 
 def _cancel_sales_order_if_safe(order: dict, sales_order_name: str) -> bool:
-	"""Cancel SO when Medusa order is canceled and no SI/DN blocks it.
+	"""Cancel SO when Medusa order is canceled and ERPNext permits it.
 
-	Returns True if SO was cancelled, False if only status was stamped.
+	A submitted Sales Order can be cancelled only if no submitted Sales Invoice
+	keeps it linked (ERPNext blocks cancellation of an invoiced order). Delivery
+	Notes are assumed already cancelled by the caller (``cancel_order``).
+
+	Returns True if the Sales Order was cancelled, False otherwise.
 	Does not write integration logs (caller / cancel_order handle logging).
 	"""
 	order_id = cstr(order.get("id") or "")
@@ -890,21 +954,18 @@ def _cancel_sales_order_if_safe(order: dict, sales_order_name: str) -> bool:
 	so = frappe.get_doc("Sales Order", sales_order_name)
 	status_label = _status_label(order)
 
-	si = frappe.db.get_value("Sales Invoice", {ORDER_ID_FIELD: order_id}, "name")
-	dns = frappe.get_all("Delivery Note", filters={ORDER_ID_FIELD: order_id}, pluck="name")
+	# Only a submitted SI blocks SO cancellation; a draft/cancelled SI does not.
+	submitted_si = frappe.db.get_value("Sales Invoice", {ORDER_ID_FIELD: order_id, "docstatus": 1}, "name")
 
-	if si:
-		frappe.db.set_value("Sales Invoice", si, ORDER_STATUS_FIELD, status_label, update_modified=False)
-	for dn in dns:
-		frappe.db.set_value("Delivery Note", dn, ORDER_STATUS_FIELD, status_label, update_modified=False)
-
-	if not si and not dns and so.docstatus == 1:
+	if not submitted_si and so.docstatus == 1:
 		so.cancel()
 		return True
 
-	frappe.db.set_value(
-		"Sales Order", sales_order_name, ORDER_STATUS_FIELD, status_label, update_modified=False
-	)
+	# Could not cancel — at least keep the status field consistent.
+	if so.docstatus == 1:
+		frappe.db.set_value(
+			"Sales Order", sales_order_name, ORDER_STATUS_FIELD, status_label, update_modified=False
+		)
 	return False
 
 
