@@ -162,11 +162,6 @@ scheduler_events = {
 		"medusa_connector.medusa.webhook_sync.scheduled_webhook_sync",
 		"medusa_connector.order.sync.sync_old_orders",
 	],
-	"cron": {
-		"*/10 * * * *": [
-			"medusa_connector.webhook.dispatch.retry_failed_webhooks",
-		],
-	},
 }
 
 # Desk page client scripts are loaded automatically from page/ folders.

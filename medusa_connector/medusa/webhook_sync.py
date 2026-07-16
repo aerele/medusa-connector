@@ -27,11 +27,11 @@ from urllib.parse import urlsplit
 import frappe
 from frappe.utils import now_datetime
 
+from medusa_connector.constants import RECEIVER_METHOD
 from medusa_connector.medusa.client import MedusaClient
 from medusa_connector.medusa.exceptions import MedusaConnectorError
 from medusa_connector.webhook.registry import registered_events
 from medusa_connector.webhook.util import (
-	RECEIVER_METHOD,
 	receiver_base_url,
 	signed_target_url,
 	strip_query,
@@ -133,12 +133,12 @@ class WebhookSyncService:
 
 		if not installed:
 			rows = [
-				self._row(ev, STATUS_SKIPPED, error="Webhooks plugin not installed")
+				self._row(ev, STATUS_SKIPPED, error=frappe._("Webhooks plugin not installed"))
 				for ev in registered_events()
 			]
 			result = self._finish(
 				status="Not Installed",
-				message="The @lambdacurry/medusa-webhooks plugin is not installed on Medusa.",
+				message=frappe._("The @lambdacurry/medusa-webhooks plugin is not installed on Medusa."),
 				rows=rows,
 			)
 			result["instructions"] = plugin_setup_steps()
@@ -146,7 +146,7 @@ class WebhookSyncService:
 
 		rows = self._reconcile(client, existing)
 
-		# Second pass: re-fetch Medusa and heal anything still missing/wrong so a
+		# Re-fetch Medusa and heal anything still missing/wrong so a
 		# partial failure on the first pass cannot leave the registry half-applied.
 		try:
 			rows = self._verify_and_heal(client, rows)
@@ -165,10 +165,11 @@ class WebhookSyncService:
 	# -- reconciliation ------------------------------------------------
 	def _reconcile(self, client: MedusaClient, existing: list[dict]) -> list[dict]:
 		ours = [w for w in existing if self._is_ours(w)]
-		desired = set(registered_events())
+		desired_events = registered_events()
+		desired = set(desired_events)
 		rows: list[dict] = []
 
-		for event in registered_events():
+		for event in desired_events:
 			matches = [w for w in ours if (w.get("event_type") or w.get("eventType")) == event]
 			target_url = signed_target_url(self.secret, event)
 			try:
@@ -178,7 +179,9 @@ class WebhookSyncService:
 				continue
 
 			if webhook_id is None:
-				rows.append(self._row(event, STATUS_FAILED, error="Could not ensure webhook registration"))
+				rows.append(
+					self._row(event, STATUS_FAILED, error=frappe._("Could not ensure webhook registration"))
+				)
 			else:
 				rows.append(self._row(event, STATUS_REGISTERED, webhook_id=webhook_id))
 
@@ -201,7 +204,13 @@ class WebhookSyncService:
 
 		return rows
 
-	def _ensure_event(self, client, event: str, matches: list[dict], target_url: str) -> str | None:
+	def _ensure_event(
+		self,
+		client: MedusaClient,
+		event: str,
+		matches: list[dict],
+		target_url: str,
+	) -> str | None:
 		"""Guarantee exactly one correct subscription for ``event``. Returns its id."""
 		# Prefer a subscription that already matches the desired configuration.
 		correct = [w for w in matches if self._is_correct(w, event, target_url)]
@@ -251,6 +260,8 @@ class WebhookSyncService:
 	def _verify_and_heal(self, client: MedusaClient, rows: list[dict]) -> list[dict]:
 		"""Re-list Medusa and repair any still-missing or still-wrong connector webhooks."""
 		existing = client.list_webhooks()
+		desired_events = registered_events()
+		desired = set(desired_events)
 		ours = [w for w in existing if self._is_ours(w)]
 		by_event: dict[str, list[dict]] = {}
 		for w in ours:
@@ -265,7 +276,7 @@ class WebhookSyncService:
 			if row.get("registration_status") not in (STATUS_REGISTERED, STATUS_FAILED):
 				healed.append(row)
 				continue
-			if not event or event not in set(registered_events()):
+			if not event or event not in desired:
 				healed.append(row)
 				continue
 
@@ -372,7 +383,6 @@ class WebhookSyncService:
 		)
 		self._replace_child_rows(parent, rows)
 		frappe.clear_document_cache(parent, parent)
-		frappe.db.commit()
 		return {
 			"status": status,
 			"message": message,

@@ -84,8 +84,8 @@ module.exports = defineConfig({
           // Order
           "order.placed",
           "order.updated",
-          "order.canceled",
           "order.completed",
+          "order.canceled",
 
           // Payment
           "payment.captured",
@@ -93,15 +93,14 @@ module.exports = defineConfig({
 
           // Fulfillment
           "order.fulfillment_created",
-          "order.fulfillment_canceled",
-          "shipment.created",
-          "delivery.created",
+          "order.shipment_created",
+          "fulfillment.canceled",
 
           // Returns
           "order.return_requested",
           "order.return_received",
 
-          // Inventory (ERPNext short names; see Step 5 note on module event mapping)
+          // Inventory
           "inventory-item.created",
           "inventory-item.updated",
           "inventory-item.deleted",
@@ -111,6 +110,7 @@ module.exports = defineConfig({
           "price-list.created",
           "price-list.updated",
           "price-list.deleted",
+
           "price-set.created",
           "price-set.updated",
           "price-set.deleted",
@@ -142,8 +142,24 @@ The plugin does not auto-wire subscribers, so add ONE generic file at
 `src/subscribers/forward-to-erpnext.ts`:
 
 ```ts
-import { SubscriberArgs, SubscriberConfig } from "@medusajs/framework/subscribers"
-import { fullWebhooksSubscriptionsWorkflow } from "@lambdacurry/medusa-webhooks/workflows"
+import {
+  SubscriberArgs,
+  SubscriberConfig,
+} from "@medusajs/framework/subscribers"
+
+import {
+  fullWebhooksSubscriptionsWorkflow,
+} from "@lambdacurry/medusa-webhooks/workflows"
+
+function toConnectorEventName(name: string): string {
+  if (name.startsWith("inventory.inventory-item.")) {
+    return name.replace("inventory.inventory-item.", "inventory-item.")
+  }
+  if (name.startsWith("inventory.inventory-level.")) {
+    return name.replace("inventory.inventory-level.", "inventory-level.")
+  }
+  return name
+}
 
 export const config: SubscriberConfig = {
   event: [
@@ -175,8 +191,8 @@ export const config: SubscriberConfig = {
     // Order
     "order.placed",
     "order.updated",
-    "order.canceled",
     "order.completed",
+    "order.canceled",
 
     // Payment
     "payment.captured",
@@ -184,17 +200,14 @@ export const config: SubscriberConfig = {
 
     // Fulfillment
     "order.fulfillment_created",
-    "order.fulfillment_canceled",
-    "shipment.created",
-    "delivery.created",
+    "order.shipment_created",
+    "fulfillment.canceled",
 
     // Returns
     "order.return_requested",
     "order.return_received",
 
-    // Inventory — Medusa *module* event names (what is actually emitted).
-    // Core inventory workflows do not emit short names like inventory-item.updated.
-    // Map these to connector short names in the handler (see toConnectorEventName below).
+    // Inventor
     "inventory.inventory-item.created",
     "inventory.inventory-item.updated",
     "inventory.inventory-item.deleted",
@@ -223,38 +236,25 @@ export const config: SubscriberConfig = {
     "stock-location.updated",
     "stock-location.deleted",
   ],
-  context: { subscriberId: "erpnext-webhook-forwarder" },
-}
-
-/** Map Inventory module event names → ERPNext connector short names. */
-function toConnectorEventName(name: string): string {
-  if (name.startsWith("inventory.inventory-item.")) {
-    return name.replace("inventory.inventory-item.", "inventory-item.")
-  }
-  if (name.startsWith("inventory.inventory-level.")) {
-    return name.replace("inventory.inventory-level.", "inventory-level.")
-  }
-  return name
+  context: {
+    subscriberId: "erpnext-webhook-forwarder",
+  },
 }
 
 export default async function forwardToErpnext({
-  event, container,
-}: SubscriberArgs<{ id: string }>): Promise<void> {
+  event,
+  container,
+}: SubscriberArgs<{ id: string }>) {
+  const eventName = toConnectorEventName(event.name)
+
   await fullWebhooksSubscriptionsWorkflow(container).run({
     input: {
-      eventName: toConnectorEventName(event.name),
+      eventName,
       eventData: event.data,
     },
   })
 }
 ```
-
-> **Why inventory uses different names:** Medusa’s Inventory *module* emits
-> `inventory.inventory-item.updated` (and related) via internal `@EmitEvents`.
-> Core inventory workflows do **not** call `emitEventStep`, so short names like
-> `inventory-item.updated` are never fired. The forwarder must subscribe to the
-> module names and map them to the connector’s short names so **Sync Webhooks**
-> subscriptions match.
 
 The `subscriptions` option, this subscriber's `event` list, and the ERPNext connector's registered event handlers should remain in sync. When support for a new Medusa resource is added, update all three together and re-run **Sync Webhooks**.
 
@@ -294,49 +294,6 @@ plugin's admin API.
 
 ---
 
-## Events registered
-| Category           | Medusa events                                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Product            | `product.created`, `product.updated`, `product.deleted`                                                                         |
-| Product Variant    | `product-variant.created`, `product-variant.updated`, `product-variant.deleted`                                                 |
-| Product Category   | `product-category.created`, `product-category.updated`, `product-category.deleted`                                              |
-| Product Collection | `product-collection.created`, `product-collection.updated`, `product-collection.deleted`                                        |
-| Customer           | `customer.created`, `customer.updated`, `customer.deleted`                                                                      |
-| Order              | `order.placed`, `order.updated`, `order.canceled`, `order.completed`                                                            |
-| Payment            | `payment.captured`, `payment.refunded`                                                                                          |
-| Fulfillment        | `order.fulfillment_created`, `order.fulfillment_canceled`, `shipment.created`, `delivery.created` (aliases: `order.shipment_created`, `fulfillment.canceled`) |
-| Return             | `order.return_requested`, `order.return_received`                                                                               |
-| Inventory          | `inventory-item.created`, `inventory-item.updated`, `inventory-item.deleted`, `inventory-level.updated`                         |
-| Price              | `price-list.created`, `price-list.updated`, `price-list.deleted`, `price-set.created`, `price-set.updated`, `price-set.deleted` |
-| Region             | `region.created`, `region.updated`, `region.deleted`                                                                            |
-| Sales Channel      | `sales-channel.created`, `sales-channel.updated`, `sales-channel.deleted`                                                       |
-| Stock Location     | `stock-location.created`, `stock-location.updated`, `stock-location.deleted`                                                    |
-
-Adding a new event later is a one-file change in the connector (a handler class);
-re-run **Sync Webhooks** and it registers automatically.
-
----
-
-## Authentication note
-
-The plugin's subscription model stores only `{event_type, target_url, active}` —
-no secret/header field — so it cannot HMAC-sign requests. The connector therefore
-authenticates by embedding the **Webhook Secret as a `token` query parameter** in
-the registered URL and validating it on receipt (constant-time compare). Keep
-**Verify Signatures** on. If you later use a signing-capable sender, the receiver
-also accepts a real HMAC signature header.
-
----
-
-## Verifying it works
-
-1. In Medusa, trigger an event (e.g. place a test order).
-2. In ERPNext, open **Ecommerce Integration Log** (filter Integration = Medusa Connector) —
-   you should see a row move `Queued → Success` (message like `webhook:{event_id}`).
-3. Failed events are retried automatically (every 10 minutes, up to 5 attempts).
-
----
-
 ## Troubleshooting
 
 | Symptom | Cause / Fix |
@@ -345,3 +302,21 @@ also accepts a real HMAC signature header.
 | **Webhook Plugin Status = Error** | Base URL/API key wrong or Medusa unreachable. Fix connection, re-sync. |
 | **Log status = Error (401 / rejected)** | Secret mismatch. Re-generate the Webhook Secret and click Sync Webhooks to re-register with the new token. |
 | **Log status = Error** | Handler error; see the log's *Traceback* / *Response Data*. Auto-retried by the scheduler. |
+
+## Setup Complete
+
+Your webhook integration is ready when:
+
+- **Webhook Plugin Status** shows **Installed**.
+- All entries in the **Webhooks** table show **Registered**.
+- No webhook has a **Failed** status.
+
+From now on, ERPNext automatically manages your webhook registrations.
+
+If you:
+- generate a new **Webhook Secret**,
+- add support for new webhook events
+
+simply click **Sync Webhooks** in **Medusa Settings** to update the webhook registrations in Medusa.
+
+No manual webhook configuration is required in Medusa after the initial setup.

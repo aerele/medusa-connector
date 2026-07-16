@@ -7,6 +7,9 @@
 MODULE_NAME = "Medusa Connector"
 SETTING_DOCTYPE = "Medusa Settings"
 
+# Whitelisted guest endpoint that receives Medusa webhooks.
+RECEIVER_METHOD = "/api/method/medusa_connector.api.webhook.receive"
+
 # Ecommerce Core doctypes (shared across integrations).
 ECOMMERCE_ITEM_DOCTYPE = "Ecommerce Item"
 INTEGRATION_LOG_DOCTYPE = "Ecommerce Integration Log"

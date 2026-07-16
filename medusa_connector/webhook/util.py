@@ -12,8 +12,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from frappe.utils import get_url
 
-# Whitelisted guest endpoint that receives Medusa webhooks.
-RECEIVER_METHOD = "/api/method/medusa_connector.api.webhook.receive"
+from medusa_connector.constants import RECEIVER_METHOD
 
 
 def receiver_base_url() -> str:

@@ -9,7 +9,6 @@ import frappe
 
 from medusa_connector.product.import_products import (
 	get_product_counts,
-	health_check,
 	import_single_product,
 	is_product_sync_running,
 	list_medusa_products,
@@ -49,11 +48,6 @@ def start_sync(mode: str = "Full", q: str | None = None, status: str | None = No
 @frappe.whitelist()
 def sync_status() -> dict:
 	return {"running": is_product_sync_running()}
-
-
-@frappe.whitelist()
-def get_health() -> dict:
-	return health_check()
 
 
 @frappe.whitelist()

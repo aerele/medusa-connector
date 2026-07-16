@@ -7,9 +7,7 @@
  "field_order": [
   "enabled",
   "section_connection",
-  "connection_mode",
   "medusa_base_url",
-  "graphql_url",
   "admin_api_key",
   "column_break_conn",
   "connection_status",
@@ -73,9 +71,6 @@
   "webhook_secret",
   "column_break_wh",
   "webhook_receiver_url",
-  "section_advanced_webhook",
-  "verify_signatures",
-  "webhook_signature_header",
   "section_registrations",
   "webhook_plugin_status",
   "last_webhook_sync",
@@ -98,17 +93,7 @@
    "label": "Connection"
   },
   {
-   "default": "REST",
-   "description": "Choose the API for connecting to Medusa. Currently, only REST is supported.",
-   "fieldname": "connection_mode",
-   "fieldtype": "Select",
-   "label": "Connection Mode",
-   "options": "REST\nGraphQL",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.connection_mode=='REST'",
-   "description": "The base URL of your Medusa backend (e.g. medusa.example.com).",
+   "description": "e.g. medusa.example.com",
    "fieldname": "medusa_base_url",
    "fieldtype": "Data",
    "label": "Medusa Base URL",
@@ -116,15 +101,7 @@
    "options": "URL"
   },
   {
-   "depends_on": "eval:doc.connection_mode=='GraphQL'",
-   "description": "GraphQL endpoint of the wrapper. Medusa v2 has no built-in GraphQL.",
-   "fieldname": "graphql_url",
-   "fieldtype": "Data",
-   "label": "GraphQL URL",
-   "options": "URL"
-  },
-  {
-   "description": "Static Medusa admin API key (sk_...).",
+   "description": "Medusa admin API key.",
    "fieldname": "admin_api_key",
    "fieldtype": "Password",
    "label": "Admin API Key",
@@ -227,7 +204,7 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Fallback when a Medusa order has no customer_id (guest checkout). Customers are created only during order sync, matched by Medusa Customer ID (not email).",
+   "description": "Handles guest checkout orders where no customer is linked in Medusa. Creates or links the customer during order synchronization when required.",
    "fieldname": "default_customer",
    "fieldtype": "Link",
    "label": "Default Customer",
@@ -271,7 +248,8 @@
    "description": "When payment is captured, create Sales Invoice (and Payment Entry if Cash/Bank Account is set).",
    "fieldname": "sync_sales_invoice",
    "fieldtype": "Check",
-   "label": "Sync Sales Invoice on Payment"
+   "label": "Sync Sales Invoice on Payment",
+   "show_description_on_click": 1
   },
   {
    "depends_on": "eval:doc.enabled && doc.sync_sales_invoice",
@@ -293,7 +271,8 @@
    "description": "When a Medusa fulfillment is created (or shipment is marked), create a Delivery Note against the Sales Order. One DN per fulfillment id (partial fulfillments supported).",
    "fieldname": "sync_delivery_note",
    "fieldtype": "Check",
-   "label": "Sync Delivery Note on Fulfillment"
+   "label": "Sync Delivery Note on Fulfillment",
+   "show_description_on_click": 1
   },
   {
    "depends_on": "eval:doc.enabled && doc.sync_delivery_note",
@@ -364,7 +343,8 @@
    "description": "When enabled and saved, imports Medusa orders between From and To with the full lifecycle: Sales Order, Sales Invoice/Payment (if paid), Delivery Notes (if fulfilled), and cancel/status updates. Existing ERPNext orders are updated to match Medusa. The checkbox is cleared after the run finishes.",
    "fieldname": "sync_old_orders",
    "fieldtype": "Check",
-   "label": "Sync Orders"
+   "label": "Sync Orders",
+   "show_description_on_click": 1
   },
   {
    "depends_on": "eval:doc.enabled && doc.sync_old_orders",
@@ -566,29 +546,6 @@
    "read_only": 1
   },
   {
-   "collapsible": 1,
-   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
-   "fieldname": "section_advanced_webhook",
-   "fieldtype": "Section Break",
-   "label": "Advanced Settings"
-  },
-  {
-   "default": "1",
-   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
-   "fieldname": "verify_signatures",
-   "fieldtype": "Check",
-   "label": "Verify Signatures"
-  },
-  {
-   "default": "X-Medusa-Signature",
-   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
-   "description": "HTTP header carrying the HMAC-SHA256 hex digest of the raw body. Used when the sender can sign; the webhooks plugin uses ?token= instead.",
-   "fieldname": "webhook_signature_header",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Signature Header"
-  },
-  {
    "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
    "fieldname": "section_registrations",
    "fieldtype": "Section Break",
@@ -640,7 +597,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-15 08:28:37.004298",
+ "modified": "2026-07-16 15:32:38.633955",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Settings",

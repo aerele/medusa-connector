@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import secrets
+from urllib.parse import urlparse
 
 import frappe
 from frappe import _
@@ -13,7 +14,6 @@ from medusa_connector.webhook.util import receiver_base_url
 # Re-sync webhooks after save when these change (status fields excluded).
 SYNC_TRIGGER_FIELDS = (
 	"enabled",
-	"connection_mode",
 	"medusa_base_url",
 	"admin_api_key",
 	"webhook_secret",
@@ -22,9 +22,7 @@ SYNC_TRIGGER_FIELDS = (
 # Re-check connection when enable / URL / mode / API key change.
 CONNECTION_VERIFY_FIELDS = (
 	"enabled",
-	"connection_mode",
 	"medusa_base_url",
-	"graphql_url",
 	"admin_api_key",
 )
 
@@ -49,7 +47,6 @@ class MedusaSettings(Document):
 		admin_api_key: DF.Password | None
 		cash_bank_account: DF.Link | None
 		company: DF.Link | None
-		connection_mode: DF.Literal["REST", "GraphQL"]
 		connection_status: DF.Literal["Unknown", "Disconnected", "Connected", "Auth Failed", "Error"]
 		consolidate_taxes: DF.Check
 		cost_center: DF.Link | None
@@ -62,8 +59,8 @@ class MedusaSettings(Document):
 		default_sales_tax_account: DF.Link | None
 		default_shipping_charges_account: DF.Link | None
 		default_stock_uom: DF.Link | None
+		delivery_note_series: DF.Literal[None]
 		enabled: DF.Check
-		graphql_url: DF.Data | None
 		inventory_sync_frequency: DF.Literal["5", "10", "15", "30", "60"]
 		item_group: DF.Link | None
 		last_connection_message: DF.SmallText | None
@@ -80,7 +77,6 @@ class MedusaSettings(Document):
 		old_orders_to: DF.Datetime | None
 		on_item_delete: DF.Literal["Draft", "Delete"]
 		price_list: DF.Link | None
-		delivery_note_series: DF.Literal[None]
 		sales_invoice_series: DF.Literal[None]
 		sales_order_series: DF.Literal[None]
 		shipping_item: DF.Link | None
@@ -92,13 +88,11 @@ class MedusaSettings(Document):
 		update_medusa_item_on_update: DF.Check
 		upload_erpnext_items: DF.Check
 		upload_variants_as_items: DF.Check
-		verify_signatures: DF.Check
 		warehouse: DF.Link | None
 		warehouse_mapping: DF.Table[MedusaWarehouseMapping]
 		webhook_plugin_status: DF.Literal["Unknown", "Installed", "Not Installed", "Error"]
 		webhook_receiver_url: DF.SmallText | None
 		webhook_secret: DF.Password | None
-		webhook_signature_header: DF.Data | None
 		webhook_subscriptions: DF.Table[MedusaWebhookRegistration]
 	# end: auto-generated types
 
@@ -298,16 +292,11 @@ class MedusaSettings(Document):
 				)
 
 	def _normalize_configured_urls(self) -> None:
-		"""Normalize Base / GraphQL URLs silently (no user alert)."""
+		"""Normalize configured Medusa URLs before validation."""
 		if self.medusa_base_url:
 			cleaned = self._normalize_url(self.medusa_base_url)
 			if cleaned != self.medusa_base_url:
 				self.medusa_base_url = cleaned
-
-		if self.graphql_url:
-			cleaned = self._normalize_url(self.graphql_url, is_graphql=True)
-			if cleaned != self.graphql_url:
-				self.graphql_url = cleaned
 
 	def _connection_settings_changed(self) -> bool:
 		before = self.get_doc_before_save()
@@ -320,24 +309,18 @@ class MedusaSettings(Document):
 		self.last_connection_test = now_datetime()
 		self.last_connection_message = _("Connector is disabled.")
 
-	def _normalize_url(self, url_str: str, is_graphql: bool = False) -> str:
+	def _normalize_url(self, url_str: str) -> str:
 		if not url_str:
 			return url_str
 
 		url_str = url_str.strip()
-		has_scheme = url_str.startswith(("http://", "https://"))
-		scheme = "https"
-		if url_str.startswith("http://"):
+		parse_url = url_str if "://" in url_str else f"https://{url_str}"
+		parsed = urlparse(parse_url)
+		scheme = parsed.scheme
+		host = parsed.netloc
+		# Handle localhost development URLs
+		if host.startswith(("localhost", "127.0.0.1")):
 			scheme = "http"
-
-		temp = url_str.split("://", 1)[1] if has_scheme else url_str
-		host, _, _ = temp.partition("/")
-
-		if not has_scheme and host.startswith(("localhost", "127.0.0.1")):
-			scheme = "http"
-
-		if is_graphql:
-			return f"{scheme}://{host}/graphql"
 
 		return f"{scheme}://{host}"
 
@@ -361,7 +344,7 @@ class MedusaSettings(Document):
 		self.last_store_defaults_sync = now_datetime()
 		self.connection_status = "Connected"
 		self.last_connection_test = now_datetime()
-		self.last_connection_message = _("Connected successfully ({0}).").format(client.mode)
+		self.last_connection_message = _("Connected successfully.")
 
 
 def _throw_medusa_api_error(exc: Exception) -> None:
@@ -410,7 +393,6 @@ def regenerate_webhook_secret() -> str:
 	doc = frappe.get_single("Medusa Settings")
 	doc.webhook_secret = secrets.token_urlsafe(32)
 	doc.save()
-	frappe.db.commit()
 	return _("Webhook secret updated. Please sync webhooks to apply it in Medusa.")
 
 

@@ -3,8 +3,6 @@
 
 """App install helpers (custom fields, one-time setup)."""
 
-from __future__ import annotations
-
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 from medusa_connector.constants import (
