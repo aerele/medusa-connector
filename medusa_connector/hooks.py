@@ -12,7 +12,7 @@ use_json_request_body = True
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext", "ecommerce_core"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -90,7 +90,7 @@ use_json_request_body = True
 # ------------
 
 # before_install = "medusa_connector.install.before_install"
-# after_install = "medusa_connector.install.after_install"
+after_install = "medusa_connector.setup.after_install"
 
 # Uninstallation
 # ------------
@@ -140,36 +140,22 @@ use_json_request_body = True
 
 # Document Events
 # ---------------
-# Hook on document methods and events
+# ERPNext → Medusa product upload (gated by Medusa Settings flags).
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"medusa_connector.tasks.all"
-# 	],
-# 	"daily": [
-# 		"medusa_connector.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"medusa_connector.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"medusa_connector.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"medusa_connector.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"hourly_long": [
+		"medusa_connector.medusa.client.scheduled_health_check",
+		"medusa_connector.medusa.webhook_sync.scheduled_webhook_sync",
+	],
+}
+
+# Desk page client scripts are loaded automatically from page/ folders.
+# Keep log retention configurable.
+
 
 # Testing
 # -------
@@ -256,12 +242,7 @@ export_python_type_annotations = True
 # Require all whitelisted methods to have type annotations
 require_type_annotated_api_methods = True
 
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
-
 # Translation
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-

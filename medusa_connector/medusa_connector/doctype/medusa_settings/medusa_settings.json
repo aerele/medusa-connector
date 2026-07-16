@@ -1,0 +1,622 @@
+{
+ "actions": [],
+ "creation": "2026-07-09 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "section_connection",
+  "medusa_base_url",
+  "admin_api_key",
+  "column_break_conn",
+  "connection_status",
+  "last_connection_test",
+  "last_connection_message",
+  "section_store_defaults",
+  "medusa_store_id",
+  "default_sales_channel_id",
+  "default_currency",
+  "column_break_store",
+  "default_region_id",
+  "default_location_id",
+  "last_store_defaults_sync",
+  "section_customers",
+  "customer_group",
+  "default_customer",
+  "section_orders",
+  "company",
+  "cost_center",
+  "sales_order_series",
+  "column_break_orders",
+  "sync_sales_invoice",
+  "sales_invoice_series",
+  "cash_bank_account",
+  "sync_delivery_note",
+  "delivery_note_series",
+  "section_order_taxes",
+  "default_sales_tax_account",
+  "default_shipping_charges_account",
+  "column_break_order_tax",
+  "consolidate_taxes",
+  "add_shipping_as_item",
+  "shipping_item",
+  "section_sync_old_orders",
+  "sync_old_orders",
+  "old_orders_from",
+  "old_orders_to",
+  "section_products",
+  "item_group",
+  "default_stock_uom",
+  "price_list",
+  "column_break_prod",
+  "upload_erpnext_items",
+  "update_medusa_item_on_update",
+  "sync_new_item_as_published",
+  "upload_variants_as_items",
+  "on_item_delete",
+  "section_product_status",
+  "last_product_sync",
+  "last_product_sync_message",
+  "section_inventory",
+  "warehouse",
+  "update_erpnext_stock_levels_to_medusa",
+  "inventory_sync_frequency",
+  "column_break_inv",
+  "last_inventory_sync",
+  "section_warehouse_mapping",
+  "fetch_medusa_locations",
+  "warehouse_mapping",
+  "section_webhook",
+  "webhook_secret",
+  "column_break_wh",
+  "webhook_receiver_url",
+  "section_registrations",
+  "webhook_plugin_status",
+  "last_webhook_sync",
+  "column_break_reg",
+  "last_webhook_sync_message",
+  "section_break_yejw",
+  "webhook_subscriptions"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_connection",
+   "fieldtype": "Section Break",
+   "label": "Connection"
+  },
+  {
+   "description": "e.g. medusa.example.com",
+   "fieldname": "medusa_base_url",
+   "fieldtype": "Data",
+   "label": "Medusa Base URL",
+   "mandatory_depends_on": "eval:doc.enabled",
+   "options": "URL"
+  },
+  {
+   "description": "Medusa admin API key.",
+   "fieldname": "admin_api_key",
+   "fieldtype": "Password",
+   "label": "Admin API Key",
+   "mandatory_depends_on": "eval:doc.enabled"
+  },
+  {
+   "fieldname": "column_break_conn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "connection_status",
+   "fieldtype": "Select",
+   "label": "Connection Status",
+   "options": "Unknown\nDisconnected\nConnected\nAuth Failed\nError",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_connection_test",
+   "fieldtype": "Datetime",
+   "label": "Last Connection Test",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_connection_message",
+   "fieldtype": "Small Text",
+   "label": "Last Connection Message",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_store_defaults",
+   "fieldtype": "Section Break",
+   "label": "Medusa Store Defaults"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Fetched from GET /admin/stores.",
+   "fieldname": "medusa_store_id",
+   "fieldtype": "Data",
+   "label": "Medusa Store ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Default sales channel used when creating products.",
+   "fieldname": "default_sales_channel_id",
+   "fieldtype": "Data",
+   "label": "Default Sales Channel ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Default currency code (e.g. eur, usd) for variant prices.",
+   "fieldname": "default_currency",
+   "fieldtype": "Data",
+   "label": "Default Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_store",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "default_region_id",
+   "fieldtype": "Data",
+   "label": "Default Region ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Primary stock location from Medusa store defaults (also used when seeding warehouse mapping).",
+   "fieldname": "default_location_id",
+   "fieldtype": "Data",
+   "label": "Default Location ID",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_store_defaults_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Store Defaults Sync",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_customers",
+   "fieldtype": "Tab Break",
+   "label": "Customers"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Customer Group applied when creating ERPNext Customers during order sync.",
+   "fieldname": "customer_group",
+   "fieldtype": "Link",
+   "label": "Customer Group",
+   "options": "Customer Group"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Handles guest checkout orders where no customer is linked in Medusa. Creates or links the customer during order synchronization when required.",
+   "fieldname": "default_customer",
+   "fieldtype": "Link",
+   "label": "Default Customer",
+   "options": "Customer"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_orders",
+   "fieldtype": "Tab Break",
+   "label": "Orders"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Company used on Sales Orders created from Medusa.",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Naming series for Sales Orders created from Medusa (e.g. SO-MED-).",
+   "fieldname": "sales_order_series",
+   "fieldtype": "Select",
+   "label": "Sales Order Series"
+  },
+  {
+   "fieldname": "column_break_orders",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "When payment is captured, create Sales Invoice (and Payment Entry if Cash/Bank Account is set).",
+   "fieldname": "sync_sales_invoice",
+   "fieldtype": "Check",
+   "label": "Sync Sales Invoice on Payment",
+   "show_description_on_click": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_sales_invoice",
+   "fieldname": "sales_invoice_series",
+   "fieldtype": "Select",
+   "label": "Sales Invoice Series"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_sales_invoice",
+   "description": "Mode of Payment / bank account used for automatic Payment Entry against the Sales Invoice.",
+   "fieldname": "cash_bank_account",
+   "fieldtype": "Link",
+   "label": "Cash / Bank Account",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "When a Medusa fulfillment is created (or shipment is marked), create a Delivery Note against the Sales Order. One DN per fulfillment id (partial fulfillments supported).",
+   "fieldname": "sync_delivery_note",
+   "fieldtype": "Check",
+   "label": "Sync Delivery Note on Fulfillment",
+   "show_description_on_click": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_delivery_note",
+   "fieldname": "delivery_note_series",
+   "fieldtype": "Select",
+   "label": "Delivery Note Series",
+   "mandatory_depends_on": "eval:doc.sync_delivery_note"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_order_taxes",
+   "fieldtype": "Section Break",
+   "label": "Taxes & Shipping"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Used when Medusa line items include tax_lines.",
+   "fieldname": "default_sales_tax_account",
+   "fieldtype": "Link",
+   "label": "Default Sales Tax Account",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Account for shipping charges when not added as an item.",
+   "fieldname": "default_shipping_charges_account",
+   "fieldtype": "Link",
+   "label": "Default Shipping Charges Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "column_break_order_tax",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Merge tax rows that share the same account head.",
+   "fieldname": "consolidate_taxes",
+   "fieldtype": "Check",
+   "label": "Consolidate Taxes"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Add shipping as a Sales Order line item instead of a tax/charge row.",
+   "fieldname": "add_shipping_as_item",
+   "fieldtype": "Check",
+   "label": "Add Shipping as Item"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.add_shipping_as_item",
+   "fieldname": "shipping_item",
+   "fieldtype": "Link",
+   "label": "Shipping Item",
+   "mandatory_depends_on": "eval:doc.add_shipping_as_item",
+   "options": "Item"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_sync_old_orders",
+   "fieldtype": "Section Break",
+   "label": "Sync Orders"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "When enabled and saved, imports Medusa orders between From and To with the full lifecycle: Sales Order, Sales Invoice/Payment (if paid), Delivery Notes (if fulfilled), and cancel/status updates. Existing ERPNext orders are updated to match Medusa. The checkbox is cleared after the run finishes.",
+   "fieldname": "sync_old_orders",
+   "fieldtype": "Check",
+   "label": "Sync Orders",
+   "show_description_on_click": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_old_orders",
+   "description": "Sync Medusa orders created on or after this date/time (full lifecycle).",
+   "fieldname": "old_orders_from",
+   "fieldtype": "Datetime",
+   "label": "From",
+   "mandatory_depends_on": "eval:doc.sync_old_orders"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.sync_old_orders",
+   "description": "Sync Medusa orders created on or before this date/time (full lifecycle).",
+   "fieldname": "old_orders_to",
+   "fieldtype": "Datetime",
+   "label": "To",
+   "mandatory_depends_on": "eval:doc.sync_old_orders"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_products",
+   "fieldtype": "Tab Break",
+   "label": "Products"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Default warehouse on Items created from Medusa product import (not used for multi-location inventory push).",
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Default Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "label": "Default Item Group",
+   "options": "Item Group"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "default_stock_uom",
+   "fieldtype": "Link",
+   "label": "Default Stock UOM",
+   "options": "UOM"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "description": "Optional Selling Price List for ERPNext \u2192 Medusa prices (else Item.standard_rate).",
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "Price List"
+  },
+  {
+   "fieldname": "column_break_prod",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Upload new ERPNext Items to Medusa when created.",
+   "fieldname": "upload_erpnext_items",
+   "fieldtype": "Check",
+   "label": "Upload New ERPNext Items to Medusa"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
+   "description": "Push Item field changes to Medusa products.",
+   "fieldname": "update_medusa_item_on_update",
+   "fieldtype": "Check",
+   "label": "Update Medusa Products on Item Update"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
+   "description": "New products are created as Published (else Draft).",
+   "fieldname": "sync_new_item_as_published",
+   "fieldtype": "Check",
+   "label": "Sync New Items as Published"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
+   "description": "Allow ERPNext Item Variants to be uploaded as Medusa product variants.",
+   "fieldname": "upload_variants_as_items",
+   "fieldtype": "Check",
+   "label": "Upload ERPNext Item Variants to Medusa"
+  },
+  {
+   "default": "Draft",
+   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
+   "description": "When an ERPNext Item is deleted, draft or delete the linked Medusa product.",
+   "fieldname": "on_item_delete",
+   "fieldtype": "Select",
+   "label": "On Item Delete",
+   "options": "Draft\nDelete"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_product_status",
+   "fieldtype": "Section Break",
+   "label": "Product Sync Status"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_product_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Product Sync",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_product_sync_message",
+   "fieldtype": "Small Text",
+   "label": "Last Product Sync Message",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "section_inventory",
+   "fieldtype": "Tab Break",
+   "label": "Inventory"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enabled",
+   "description": "Push ERPNext Bin quantities to Medusa location levels (ERPNext is the stock master). Map each ERPNext warehouse to a Medusa stock location below. Open stock in ERPNext before enabling \u2014 enabling with zero stock can overwrite Medusa quantities with 0. Medusa Admin stock edits will be overwritten on the next sync.",
+   "fieldname": "update_erpnext_stock_levels_to_medusa",
+   "fieldtype": "Check",
+   "label": "Update Stock Levels to Medusa",
+   "show_description_on_click": 1
+  },
+  {
+   "default": "15",
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "fieldname": "inventory_sync_frequency",
+   "fieldtype": "Select",
+   "label": "Inventory Sync Frequency (Minutes)",
+   "options": "5\n10\n15\n30\n60"
+  },
+  {
+   "fieldname": "column_break_inv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enabled",
+   "fieldname": "last_inventory_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Inventory Sync",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "fieldname": "section_warehouse_mapping",
+   "fieldtype": "Section Break",
+   "label": "Warehouse \u2194 Location Mapping"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "description": "Load stock locations from Medusa into the table, then link each row to an ERPNext warehouse.",
+   "fieldname": "fetch_medusa_locations",
+   "fieldtype": "Button",
+   "label": "Fetch Medusa Locations"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "description": "One-to-one map: ERPNext warehouse stock is pushed to the linked Medusa stock location. Enable only the rows you want to sync.",
+   "fieldname": "warehouse_mapping",
+   "fieldtype": "Table",
+   "label": "Warehouse Mapping",
+   "mandatory_depends_on": "eval:doc.enabled && doc.update_erpnext_stock_levels_to_medusa",
+   "options": "Medusa Warehouse Mapping"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "section_webhook",
+   "fieldtype": "Tab Break",
+   "label": "Inbound Webhooks"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook Secret",
+   "mandatory_depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "column_break_wh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "description": "Medusa posts events to this URL.",
+   "fieldname": "webhook_receiver_url",
+   "fieldtype": "Small Text",
+   "label": "Webhook Receiver URL",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "section_registrations",
+   "fieldtype": "Section Break",
+   "label": "Registered Webhooks"
+  },
+  {
+   "default": "Unknown",
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "webhook_plugin_status",
+   "fieldtype": "Select",
+   "label": "Webhook Plugin Status",
+   "options": "Unknown\nInstalled\nNot Installed\nError",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "last_webhook_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Webhook Sync",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "column_break_reg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "last_webhook_sync_message",
+   "fieldtype": "Small Text",
+   "label": "Last Sync Message",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "description": "Live mirror of connector-managed webhooks in Medusa.",
+   "fieldname": "webhook_subscriptions",
+   "fieldtype": "Table",
+   "label": "Webhooks",
+   "options": "Medusa Webhook Registration",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
+   "fieldname": "section_break_yejw",
+   "fieldtype": "Section Break"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-16 15:32:38.633955",
+ "modified_by": "Administrator",
+ "module": "Medusa Connector",
+ "name": "Medusa Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
