@@ -13,6 +13,7 @@ from medusa_connector.product.services.utils import (
 	apply_hsn_code,
 	ensure_barcodes,
 	save_item,
+	sync_item_price,
 	upsert_mapping,
 )
 
@@ -56,7 +57,12 @@ class MasterService:
 		return self.ensure_group(name)
 
 	def ensure_group(self, name: str) -> str:
-		name = (name or "").strip() or get_root_of("Item Group")
+		"""Create or get Item Group. Use root if name is empty."""
+		name = (name or "").strip()
+		if not name:
+			name = get_root_of("Item Group")
+		if frappe.db.exists("Item Group", name):
+			return name
 		parent = get_root_of("Item Group")
 		return self.get_or_create(
 			"Item Group",
@@ -69,16 +75,6 @@ class MasterService:
 		return self.get_or_create("Brand", brand, "brand")
 
 	def sync_attributes(self, attributes: list[dict]) -> None:
-		names = [a.get("name") for a in attributes if a.get("name")]
-		existing_names = (
-			{
-				row.name
-				for row in frappe.get_all("Item Attribute", filters={"name": ["in", names]}, fields=["name"])
-			}
-			if names
-			else set()
-		)
-
 		for attribute in attributes:
 			name = attribute.get("name")
 			if not name:
@@ -86,7 +82,7 @@ class MasterService:
 			values = list(dict.fromkeys(v for v in (attribute.get("values") or []) if v))
 			if not values:
 				continue
-			if name not in existing_names:
+			if not frappe.db.exists("Item Attribute", name):
 				used: set[str] = set()
 				self.get_or_create(
 					"Item Attribute",
@@ -181,6 +177,8 @@ class ItemService:
 			action = "created"
 		self.apply_item_fields(item, mapped, has_variants=has_variants)
 		save_item(item)
+		if not has_variants:
+			sync_item_price(item.name, mapped, self.settings)
 		upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,
@@ -192,10 +190,11 @@ class ItemService:
 
 	def apply_item_fields(self, item, mapped: dict, *, has_variants: int) -> None:
 		self._apply_basic_fields(item, mapped, has_variants)
-		self._apply_brand(item, mapped)
+		self._apply_brand_and_pricing(item, mapped, has_variants)
 		self._apply_inventory_fields(item, mapped, has_variants=has_variants)
 		self._apply_tax_fields(item, mapped, has_variants)
 		self._apply_template_fields(item, mapped, has_variants)
+		self._apply_defaults(item, mapped)
 		apply_dimension_fields(item, mapped)
 
 	def _apply_basic_fields(self, item, mapped: dict, has_variants: int) -> None:
@@ -211,9 +210,11 @@ class ItemService:
 		item.is_sales_item = 1
 		item.is_stock_item = int(mapped.get("is_stock_item", item.is_stock_item))
 
-	def _apply_brand(self, item, mapped: dict) -> None:
-		if mapped.get("brand"):
+	def _apply_brand_and_pricing(self, item, mapped: dict, has_variants: int) -> None:
+		if mapped.get("brand") and frappe.get_meta("Item").has_field("brand"):
 			item.brand = self.master.ensure_brand(mapped["brand"])
+		if not has_variants and mapped.get("standard_rate") is not None:
+			item.standard_rate = flt(mapped["standard_rate"])
 
 	def _apply_inventory_fields(self, item, mapped: dict, *, has_variants: int = 0) -> None:
 		if "allow_negative_stock" in mapped:
@@ -245,3 +246,17 @@ class ItemService:
 			name = attribute.get("name")
 			if name:
 				item.append("attributes", {"attribute": name})
+
+	def _apply_defaults(self, item, mapped: dict) -> None:
+		warehouse = mapped.get("default_warehouse") or self.settings.get("warehouse")
+		if warehouse:
+			self.ensure_item_default(item, warehouse)
+
+	def ensure_item_default(self, item, warehouse: str) -> None:
+		from erpnext import get_default_company
+
+		company = get_default_company()
+		if not item.item_defaults:
+			item.append("item_defaults", {"company": company, "default_warehouse": warehouse})
+		else:
+			item.item_defaults[0].default_warehouse = warehouse

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import frappe
 from ecommerce_core.utils.address_mapping import get_country_name
-from frappe.utils import now
+from frappe.utils import flt, now
 
 from medusa_connector.constants import MODULE_NAME
 
@@ -130,6 +130,66 @@ def _existing_mapping_name(erpnext_item_code: str, *, for_update: bool = False) 
 		.run()
 	)
 	return row[0][0] if row else None
+
+
+def sync_item_price(item_code: str, mapped: dict, settings) -> None:
+	"""Create/update the Item Price on the configured Selling Price List.
+
+	Zero or missing prices are ignored; existing Item Prices are left untouched.
+	"""
+	price_list = settings.get("price_list")
+
+	if not (price_list and frappe.db.exists("Price List", price_list)):
+		return
+
+	rate = mapped.get("standard_rate")
+
+	if rate is None:
+		prices = mapped.get("prices") or []
+		rate = prices[0].get("amount") if prices else None
+
+	if rate is None:
+		return
+
+	rate = flt(rate)
+
+	if rate <= 0:
+		return
+
+	existing = frappe.db.get_value(
+		"Item Price",
+		{
+			"item_code": item_code,
+			"price_list": price_list,
+			"selling": 1,
+		},
+		[
+			"name",
+			"price_list_rate",
+		],
+		as_dict=True,
+	)
+
+	if existing:
+		if flt(existing.price_list_rate) != rate:
+			frappe.db.set_value(
+				"Item Price",
+				existing.name,
+				"price_list_rate",
+				rate,
+				update_modified=False,
+			)
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Item Price",
+			"item_code": item_code,
+			"price_list": price_list,
+			"price_list_rate": rate,
+			"selling": 1,
+		}
+	).insert()
 
 
 def apply_dimension_fields(item, data: dict) -> bool:

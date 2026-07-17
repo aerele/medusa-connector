@@ -14,6 +14,7 @@ from medusa_connector.product.services.utils import (
 	apply_variant_hsn_code,
 	ensure_barcodes,
 	save_item,
+	sync_item_price,
 	upsert_mapping,
 )
 
@@ -32,30 +33,36 @@ class VariantService:
 	) -> str | None:
 		variant_id = variant.get("medusa_variant_id")
 		attributes = variant.get("attributes") or {}
+
 		if not variant_id or not attributes:
 			return None
 
-		item = self._resolve_existing_variant(template_code, product_id, variant, attributes)
+		item = self._resolve_existing_variant(
+			template_code,
+			product_id,
+			variant,
+			attributes,
+		)
 
 		if item:
 			self.update_variant_item(item, variant)
 		else:
 			item = create_variant(template_code, attributes)
+
 			if variant.get("sku"):
 				item.item_code = variant["sku"]
+
 			self.apply_variant_fields(item, variant)
+			save_item(item)
+			sync_item_price(item.name, variant, self.settings)
 
-			try:
-				save_item(item)
-			except frappe.DuplicateEntryError:
-				frappe.db.rollback()
-				conflicting_code = item.name
-				if not conflicting_code or not frappe.db.exists("Item", conflicting_code):
-					raise
-				item = frappe.get_doc("Item", conflicting_code)
-				self.update_variant_item(item, variant)
+		self.finish_variant_mapping(
+			item,
+			product_id,
+			variant,
+			template_code,
+		)
 
-		self.finish_variant_mapping(item, product_id, variant, template_code)
 		return item.name
 
 	def _resolve_existing_variant(
@@ -120,6 +127,13 @@ class VariantService:
 
 		if changed:
 			save_item(item)
+
+		# Price synchronization is independent from Item document changes.
+		sync_item_price(
+			item.name,
+			variant,
+			self.settings,
+		)
 
 	def apply_variant_fields(self, item, variant: dict) -> bool:
 		"""Apply Medusa variant fields and return whether Item changed."""

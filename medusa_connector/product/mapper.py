@@ -10,9 +10,10 @@ Categories, Collections, Tags, Types.
 from __future__ import annotations
 
 import frappe
+from frappe.utils import flt
 from frappe.utils.nestedset import get_root_of
 
-from medusa_connector.constants import DEFAULT_OPTION_VALUES, DEFAULT_VARIANT_TITLE, SETTING_DOCTYPE
+from medusa_connector.constants import SETTING_DOCTYPE
 
 
 class ProductMapper:
@@ -39,9 +40,10 @@ class ProductMapper:
 		self._validate(product)
 
 		product_id = product.get("id")
-		title = product.get("title")  # in medusa title is unique
+		title = product.get("title")
 		status = str(product.get("status") or "draft").strip().lower()
 		thumbnail = product.get("thumbnail")
+		origin_country = product.get("origin_country")
 
 		options = product.get("options") or []
 		variants = product.get("variants") or []
@@ -65,6 +67,7 @@ class ProductMapper:
 			primary_variant,
 			has_variants,
 		)
+		is_stock_item = self._is_stock_item(manage_inventory=manage_inventory)
 
 		item_code = self._resolve_item_code(
 			title=title,
@@ -83,20 +86,23 @@ class ProductMapper:
 			"image": thumbnail,
 			"item_group": self._map_item_group(product),
 			"stock_uom": self.settings.get("default_stock_uom") or "Nos",
+			"default_warehouse": self.settings.get("warehouse"),
 			"has_variants": int(has_variants),
 			# Template rows never carry a variant's sku — ItemService already
 			# ignores this field when has_variants=1, but we don't hand it a
 			# value that implies otherwise.
 			"sku": None if has_variants else primary_sku,
 			"barcode": barcode,
+			"standard_rate": self._primary_price(primary_variant) if not has_variants else 0,
+			"prices": self._prices(primary_variant) if not has_variants else [],
 			"medusa_variant_id": None if has_variants else (primary_variant or {}).get("id"),
 			"gst_hsn_code": hs_code,
-			"origin_country": product.get("origin_country"),
+			"origin_country": origin_country,
 			"weight": dims.get("weight"),
 			"length": dims.get("length"),
 			"width": dims.get("width"),
 			"height": dims.get("height"),
-			"is_stock_item": manage_inventory,
+			"is_stock_item": is_stock_item,
 			"brand": self._brand_name(product, metadata),
 			"categories": self._categories(product),
 			"tags": self._tags(product),
@@ -160,7 +166,7 @@ class ProductMapper:
 		]
 
 	def _map_item_group(self, product: dict) -> str:
-		"""First Medusa category, else settings default, else root."""
+		"""First Medusa category, else collection, else settings default, else root."""
 		categories = product.get("categories") or []
 		for category in categories:
 			if not isinstance(category, dict):
@@ -168,6 +174,9 @@ class ProductMapper:
 			name = category.get("name")
 			if name:
 				return name
+		collection = self._collection_title(product)
+		if collection:
+			return collection
 		# Use configured setting or root
 		item_group = self.settings.get("item_group")
 		if item_group:
@@ -201,6 +210,13 @@ class ProductMapper:
 		return rows
 
 	@staticmethod
+	def _collection_title(product: dict) -> str | None:
+		collection = product.get("collection")
+		if isinstance(collection, dict):
+			return collection.get("title") or collection.get("handle")
+		return None
+
+	@staticmethod
 	def _brand_name(product: dict, metadata: dict) -> str | None:
 		brand = product.get("brand")
 		if isinstance(brand, dict):
@@ -217,6 +233,8 @@ class ProductMapper:
 		for tag in product.get("tags") or []:
 			if isinstance(tag, dict) and tag.get("value"):
 				tags.append(str(tag["value"]).strip())
+			elif isinstance(tag, str) and tag.strip():
+				tags.append(tag.strip())
 		return tags
 
 	@staticmethod
@@ -233,7 +251,7 @@ class ProductMapper:
 		"""Return True when the product has real variant options."""
 		for option in product.get("options") or []:
 			for value in option.get("values") or []:
-				if value.get("value") not in DEFAULT_OPTION_VALUES:
+				if value.get("value") != "Default option value":
 					return True
 
 		return False
@@ -277,6 +295,49 @@ class ProductMapper:
 				return str(variant[key]).strip()
 		return None
 
+	def _primary_price(self, variant: dict | None) -> float:
+		prices = self._prices(variant)
+		if not prices:
+			return 0.0
+		currency = (self.settings.get("default_currency") or "").lower()
+		if currency:
+			for price in prices:
+				if str(price.get("currency_code") or "").lower() == currency:
+					return flt(price.get("amount"))
+		return flt(prices[0].get("amount"))
+
+	@staticmethod
+	def _prices(variant: dict | None) -> list[dict]:
+		"""Normalise Medusa variant prices (Admin price list entries)."""
+		if not variant:
+			return []
+		out = []
+		for price in variant.get("prices") or []:
+			if not isinstance(price, dict):
+				continue
+			amount = price.get("amount")
+			if amount is None:
+				continue
+			out.append(
+				{
+					"amount": flt(amount),
+					"currency_code": (price.get("currency_code") or "").lower(),
+					"price_id": price.get("id"),
+				}
+			)
+		if out:
+			return out
+		calc = variant.get("calculated_price") or {}
+		if calc.get("calculated_amount") is not None:
+			return [
+				{
+					"amount": flt(calc.get("calculated_amount")),
+					"currency_code": (calc.get("currency_code") or "").lower(),
+					"price_id": None,
+				}
+			]
+		return []
+
 	def _map_variant(
 		self,
 		variant: dict,
@@ -299,6 +360,8 @@ class ProductMapper:
 			"ean": variant.get("ean"),
 			"upc": variant.get("upc"),
 			"image": variant.get("thumbnail") or self._first_image_url(product),
+			"standard_rate": self._primary_price(variant),
+			"prices": self._prices(variant),
 			"weight": dims.get("weight"),
 			"length": dims.get("length"),
 			"width": dims.get("width"),
@@ -353,6 +416,11 @@ class ProductMapper:
 		return bool(variant.get("manage_inventory"))
 
 	@staticmethod
+	def _is_stock_item(*, manage_inventory: bool) -> int:
+		"""ERPNext Maintain Stock only when Medusa manages inventory."""
+		return 1 if manage_inventory else 0
+
+	@staticmethod
 	def _extract_hs_code(*sources: dict | None) -> str | None:
 		"""Return first non-empty ``hs_code`` from the given Medusa dicts only."""
 		for source in sources:
@@ -373,7 +441,7 @@ class ProductMapper:
 		variant_title = (variant.get("title") or variant.get("id") or "").strip()
 		variant_title = ProductMapper._strip_repeated_title_prefix(variant_title, product_title)
 
-		if not variant_title or variant_title.lower() in {DEFAULT_VARIANT_TITLE.lower(), "default"}:
+		if not variant_title or variant_title.lower() in {"default variant", "default"}:
 			name = product_title
 		elif product_title and variant_title == product_title:
 			name = product_title

@@ -37,32 +37,22 @@ class ProductSync:
 		from medusa_connector.utils.sync_guard import inbound_sync
 
 		with inbound_sync():
-			try:
-				return self._sync_product(mapped_product)
-			except frappe.DuplicateEntryError:
-				# A concurrent webhook or the ERPNext → Medusa export can insert
-				# the same Item between our exists-check and insert. Roll back and
-				# retry — the second pass sees the Item and updates it instead.
-				frappe.db.rollback()
-				return self._sync_product(mapped_product)
+			product_id = mapped_product["medusa_product_id"]
+			has_variants = int(mapped_product.get("has_variants") or 0)
+			existing = self._get_existing_item(mapped_product, has_variants)
 
-	def _sync_product(self, mapped_product: dict) -> dict:
-		product_id = mapped_product["medusa_product_id"]
-		has_variants = int(mapped_product.get("has_variants") or 0)
-		existing = self._get_existing_item(mapped_product, has_variants)
+			self._sync_masters(mapped_product)
 
-		self._sync_masters(mapped_product)
+			if has_variants:
+				item_code, action, variant_codes = self._sync_template_with_variants(
+					mapped_product, existing, product_id
+				)
+			else:
+				item_code, action = self.item.sync_simple_item(mapped_product, existing)
+				variant_codes = []
 
-		if has_variants:
-			item_code, action, variant_codes = self._sync_template_with_variants(
-				mapped_product, existing, product_id
-			)
-		else:
-			item_code, action = self.item.sync_simple_item(mapped_product, existing)
-			variant_codes = []
-
-		self.apply_tags(item_code, mapped_product.get("tags") or [])
-		return {"item_code": item_code, "action": action, "variant_codes": variant_codes}
+			self.apply_tags(item_code, mapped_product.get("tags") or [])
+			return {"item_code": item_code, "action": action, "variant_codes": variant_codes}
 
 	def _sync_masters(self, mapped_product: dict) -> None:
 		self.master.ensure_stock_uom(mapped_product.get("stock_uom"))

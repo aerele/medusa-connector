@@ -10,12 +10,7 @@ from typing import Any
 import frappe
 from frappe.utils import flt, strip_html
 
-from medusa_connector.constants import (
-	DEFAULT_OPTION_VALUE,
-	DEFAULT_VARIANT_TITLE,
-	MODULE_NAME,
-	SETTING_DOCTYPE,
-)
+from medusa_connector.constants import MODULE_NAME, SETTING_DOCTYPE
 from medusa_connector.medusa.product import ProductService
 from medusa_connector.product.services.utils import upsert_mapping
 from medusa_connector.utils.logging import create_sync_log, update_sync_log
@@ -23,17 +18,15 @@ from medusa_connector.utils.store_defaults import get_store_defaults
 from medusa_connector.utils.sync_guard import is_inbound_sync
 
 DEFAULT_OPTION_TITLE = "Default option"
+DEFAULT_OPTION_VALUE = "Default variant"
 RETRY_METHOD = "medusa_connector.product.export_products.retry_erpnext_item_upload"
-UPLOAD_JOB = "medusa_connector.product.export_products.upload_item_to_medusa"
 
 
 def upload_erpnext_item(doc, method: str | None = None) -> None:
 	"""Item after_insert / on_update hook: push new Items to Medusa.
 
 	Medusa is the item master — creations push outbound, while updates to
-	already-synced Items only flow inbound (Medusa → ERPNext). The upload is
-	enqueued after commit so Medusa's creation webhooks cannot race ahead of
-	the Item's own transaction.
+	already-synced Items only flow inbound (Medusa → ERPNext).
 	"""
 	if not _is_eligible_for_export(doc):
 		return
@@ -44,31 +37,13 @@ def upload_erpnext_item(doc, method: str | None = None) -> None:
 	if doc.variant_of and not settings.upload_variants_as_items:
 		return
 
-	if _get_mapping(doc.name):
-		return
-
-	frappe.enqueue(
-		UPLOAD_JOB,
-		queue="short",
-		enqueue_after_commit=True,
-		deduplicate=True,
-		job_id=f"medusa_upload:{doc.name}",
-		item_code=doc.name,
-	)
-
-
-def upload_item_to_medusa(item_code: str) -> None:
-	"""Background job: push a committed, not-yet-synced Item to Medusa."""
-	if _get_mapping(item_code):
-		return
-
 	try:
-		item = frappe.get_doc("Item", item_code)
-		settings = frappe.get_cached_doc(SETTING_DOCTYPE)
-		_create_medusa_product(item, settings)
+		if _get_mapping(doc.name):
+			return
+		_create_medusa_product(doc, settings)
 	except Exception:
 		frappe.log_error(
-			title=f"Medusa upload failed for Item {item_code}",
+			title=f"Medusa upload failed for Item {doc.name}",
 			message=frappe.get_traceback(with_context=True),
 		)
 
@@ -336,29 +311,21 @@ def _variant_title(item) -> str:
 	attrs = [row.attribute_value for row in (item.attributes or []) if row.attribute_value]
 	if attrs:
 		return " / ".join(attrs)[:140]
-	# Simple products match Medusa Admin's native default variant title
-	return DEFAULT_VARIANT_TITLE
+	return (item.item_name or item.name or DEFAULT_OPTION_VALUE)[:140]
 
 
 def _variant_prices(item, settings) -> list[dict]:
-	if not settings.price_list:
-		return []
-
-	price_row = frappe.db.get_value(
-		"Item Price",
-		{"item_code": item.name, "price_list": settings.price_list, "selling": 1},
-		["price_list_rate", "currency"],
-		as_dict=True,
-	)
-	if not price_row or price_row.price_list_rate is None or not price_row.currency:
-		return []
-
-	return [
-		{
-			"currency_code": price_row.currency.lower(),
-			"amount": flt(price_row.price_list_rate),
-		}
-	]
+	currency = (settings.default_currency or get_store_defaults().get("default_currency") or "usd").lower()
+	amount = flt(item.standard_rate or 0)
+	if settings.price_list:
+		rate = frappe.db.get_value(
+			"Item Price",
+			{"item_code": item.name, "price_list": settings.price_list, "selling": 1},
+			"price_list_rate",
+		)
+		if rate is not None:
+			amount = flt(rate)
+	return [{"currency_code": currency, "amount": amount}]
 
 
 def _manage_inventory(item, settings) -> bool:

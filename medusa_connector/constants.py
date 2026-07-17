@@ -34,12 +34,13 @@ MEDUSA_WEBHOOK_EVENTS = (
 	"order.fulfillment_canceled",
 	"fulfillment.canceled",
 	# Shipment / Delivery
-	"order.shipment_created",
 	"shipment.created",
 	"delivery.created",
 	# Return
 	"order.return_requested",
 	"order.return_received",
+	"order.claim_created",
+	"order.exchange_created",
 )
 
 
@@ -59,10 +60,8 @@ REFUND_ID_FIELD = "medusa_refund_id"
 RETURN_ID_FIELD = "medusa_return_id"
 CLAIM_ID_FIELD = "medusa_claim_id"
 EXCHANGE_ID_FIELD = "medusa_exchange_id"
-
-DEFAULT_OPTION_VALUE = "Default option value"
-DEFAULT_VARIANT_TITLE = "Default variant"  # Medusa Admin's native default variant title
-DEFAULT_OPTION_VALUES = (DEFAULT_OPTION_VALUE, DEFAULT_VARIANT_TITLE)
+TRANSACTION_ID_FIELD = "medusa_transaction_id"
+ORDER_LINE_ID_FIELD = "medusa_order_line_id"
 
 
 class MedusaOperationStatus(Enum):
@@ -131,3 +130,38 @@ SENSITIVE_KEYS = {
 	"postal_code",
 	"zip",
 }
+
+
+# Admin API field expand for full order hydration (items, addresses, shipping, fulfillments).
+DEFAULT_ORDER_FIELDS = (
+	"*items,*items.variant,*items.tax_lines,*items.adjustments,"
+	"*shipping_address,*billing_address,*customer,"
+	"*shipping_methods,*shipping_methods.tax_lines,*shipping_methods.adjustments,"
+	"*fulfillments,*fulfillments.items,*fulfillments.labels,"
+	"*payment_collections,*payment_collections.payments,*payment_collections.payments.refunds,"
+	"*returns,*returns.items,*returns.shipping_methods,*returns.transactions,"
+	"*claims,*claims.return,*claims.additional_items,*claims.transactions,"
+	"*exchanges,*exchanges.return,*exchanges.additional_items,*exchanges.transactions,"
+	"*transactions,*summary,"
+	"+currency_code,+total,+subtotal,+shipping_total,+tax_total,"
+	"+discount_total,+discount_tax_total,+item_total,+item_subtotal,+item_tax_total,"
+	"+shipping_subtotal,+shipping_tax_total,+original_total,+original_tax_total,"
+	"+gift_card_total,+gift_card_tax_total,+credit_line_total,+email,+display_id,+status,"
+	"+payment_status,+fulfillment_status,+metadata"
+)
+
+# Order fetch focused on fulfillments (DN sync).
+DEFAULT_ORDER_FULFILLMENT_FIELDS = (
+	"id,display_id,status,payment_status,fulfillment_status,created_at,"
+	"*items,*items.variant,"
+	"*fulfillments,*fulfillments.items,*fulfillments.labels"
+)
+
+# Admin payment retrieve: collection + linked order (order_payment_collection link).
+# Webhook bodies only include payment id; order is resolved via this expand.
+DEFAULT_PAYMENT_FIELDS = (
+	"id,amount,currency_code,captured_at,canceled_at,"
+	"payment_collection_id,payment_session_id,provider_id,"
+	"*captures,*refunds,"
+	"*payment_collection,*payment_collection.order"
+)

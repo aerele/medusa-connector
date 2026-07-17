@@ -3,17 +3,23 @@
 
 """App install helpers (custom fields, one-time setup)."""
 
+import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 from medusa_connector.constants import (
 	ADDRESS_ID_FIELD,
+	CLAIM_ID_FIELD,
 	CUSTOMER_ID_FIELD,
+	EXCHANGE_ID_FIELD,
 	FULFILLMENT_ID_FIELD,
 	ORDER_ID_FIELD,
 	ORDER_ITEM_DISCOUNT_FIELD,
+	ORDER_LINE_ID_FIELD,
 	ORDER_NUMBER_FIELD,
 	ORDER_STATUS_FIELD,
 	REFUND_ID_FIELD,
+	RETURN_ID_FIELD,
+	TRANSACTION_ID_FIELD,
 )
 
 
@@ -63,6 +69,21 @@ def _refund_id_field(insert_after: str) -> dict:
 	return {
 		"fieldname": REFUND_ID_FIELD,
 		"label": "Medusa Refund ID",
+		"fieldtype": "Data",
+		"insert_after": insert_after,
+		"read_only": 1,
+		"print_hide": 1,
+		"translatable": 0,
+		"no_copy": 1,
+		"in_standard_filter": 1,
+		"search_index": 1,
+	}
+
+
+def _external_id_field(fieldname: str, label: str, insert_after: str) -> dict:
+	return {
+		"fieldname": fieldname,
+		"label": label,
 		"fieldtype": "Data",
 		"insert_after": insert_after,
 		"read_only": 1,
@@ -131,6 +152,10 @@ def setup_custom_fields(update: bool = True) -> None:
 			_order_number_field(ORDER_ID_FIELD),
 			_order_status_field(ORDER_NUMBER_FIELD),
 			_refund_id_field(ORDER_STATUS_FIELD),
+			_external_id_field(RETURN_ID_FIELD, "Medusa Return ID", REFUND_ID_FIELD),
+			_external_id_field(CLAIM_ID_FIELD, "Medusa Claim ID", RETURN_ID_FIELD),
+			_external_id_field(EXCHANGE_ID_FIELD, "Medusa Exchange ID", CLAIM_ID_FIELD),
+			_external_id_field(TRANSACTION_ID_FIELD, "Medusa Transaction ID", EXCHANGE_ID_FIELD),
 		],
 		"Delivery Note": [
 			_order_id_field("naming_series"),
@@ -148,8 +173,12 @@ def setup_custom_fields(update: bool = True) -> None:
 				"in_standard_filter": 1,
 				"search_index": 1,
 			},
+			_external_id_field(RETURN_ID_FIELD, "Medusa Return ID", FULFILLMENT_ID_FIELD),
+			_external_id_field(CLAIM_ID_FIELD, "Medusa Claim ID", RETURN_ID_FIELD),
+			_external_id_field(EXCHANGE_ID_FIELD, "Medusa Exchange ID", CLAIM_ID_FIELD),
 		],
 		"Sales Order Item": [
+			_external_id_field(ORDER_LINE_ID_FIELD, "Medusa Order Line ID", "item_code"),
 			{
 				"fieldname": ORDER_ITEM_DISCOUNT_FIELD,
 				"label": "Medusa Item Discount",
@@ -159,6 +188,12 @@ def setup_custom_fields(update: bool = True) -> None:
 				"print_hide": 1,
 				"no_copy": 1,
 			},
+		],
+		"Delivery Note Item": [
+			_external_id_field(ORDER_LINE_ID_FIELD, "Medusa Order Line ID", "item_code"),
+		],
+		"Sales Invoice Item": [
+			_external_id_field(ORDER_LINE_ID_FIELD, "Medusa Order Line ID", "item_code"),
 		],
 		"Payment Entry": [
 			{
@@ -174,10 +209,21 @@ def setup_custom_fields(update: bool = True) -> None:
 				"search_index": 1,
 			},
 			_refund_id_field(ORDER_ID_FIELD),
+			_external_id_field(RETURN_ID_FIELD, "Medusa Return ID", REFUND_ID_FIELD),
+			_external_id_field(CLAIM_ID_FIELD, "Medusa Claim ID", RETURN_ID_FIELD),
+			_external_id_field(EXCHANGE_ID_FIELD, "Medusa Exchange ID", CLAIM_ID_FIELD),
+			_external_id_field(TRANSACTION_ID_FIELD, "Medusa Transaction ID", EXCHANGE_ID_FIELD),
 		],
 	}
 	create_custom_fields(custom_fields, update=update)
 
 
 def after_install() -> None:
-	setup_custom_fields(update=True)
+	try:
+		setup_custom_fields(update=True)
+	except Exception:
+		frappe.log_error(
+			title="Medusa Connector after_install failed",
+			message=frappe.get_traceback(with_context=True),
+		)
+		raise
