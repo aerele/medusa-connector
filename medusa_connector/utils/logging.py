@@ -1,9 +1,9 @@
-# Copyright (c) 2026, Aerele and contributors
+# Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 """Logging utilities for Medusa sync and webhook operations.
 
 Provides centralized logging for sync outcomes and the ``@logged_sync``
-decorator for consistent Success, Invalid, and Error status handling.
+decorator for consistent Success and Error status handling.
 """
 
 from __future__ import annotations

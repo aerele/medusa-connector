@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Aerele and contributors
+# Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 
 """Constants for the Medusa Connector."""
@@ -60,13 +60,16 @@ RETURN_ID_FIELD = "medusa_return_id"
 CLAIM_ID_FIELD = "medusa_claim_id"
 EXCHANGE_ID_FIELD = "medusa_exchange_id"
 
+DEFAULT_OPTION_VALUE = "Default option value"
+DEFAULT_VARIANT_TITLE = "Default variant"  # Medusa Admin's native default variant title
+DEFAULT_OPTION_VALUES = (DEFAULT_OPTION_VALUE, DEFAULT_VARIANT_TITLE)
+
 
 class MedusaOperationStatus(Enum):
 	"""Status values for Medusa connector operations."""
 
 	SUCCESS = "success"
 	SKIPPED = "skipped"
-	INVALID = "invalid"
 	ERROR = "error"
 
 
@@ -74,7 +77,6 @@ class IntegrationLogStatus(Enum):
 	"""Status values for Ecommerce Integration Log entries."""
 
 	SUCCESS = "Success"
-	INVALID = "Invalid"
 	ERROR = "Error"
 	QUEUED = "Queued"
 	FAILED = "Failed"
@@ -84,7 +86,6 @@ class IntegrationLogStatus(Enum):
 _RESULT_STATUS_MAP = {
 	MedusaOperationStatus.SUCCESS.value: IntegrationLogStatus.SUCCESS.value,
 	MedusaOperationStatus.SKIPPED.value: IntegrationLogStatus.SUCCESS.value,
-	MedusaOperationStatus.INVALID.value: IntegrationLogStatus.INVALID.value,
 	MedusaOperationStatus.ERROR.value: IntegrationLogStatus.ERROR.value,
 }
 

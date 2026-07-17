@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Aerele and contributors
+# Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 
 """App install helpers (custom fields, one-time setup)."""
@@ -99,6 +99,26 @@ def setup_custom_fields(update: bool = True) -> None:
 				"print_hide": 1,
 				"translatable": 0,
 				"no_copy": 1,
+			},
+		],
+		"Item": [
+			{
+				"fieldname": "medusa_custom_length",
+				"label": "Length (Medusa)",
+				"fieldtype": "Float",
+				"insert_after": "weight_uom",
+			},
+			{
+				"fieldname": "medusa_custom_width",
+				"label": "Width (Medusa)",
+				"fieldtype": "Float",
+				"insert_after": "medusa_custom_length",
+			},
+			{
+				"fieldname": "medusa_custom_height",
+				"label": "Height (Medusa)",
+				"fieldtype": "Float",
+				"insert_after": "medusa_custom_width",
 			},
 		],
 		"Sales Order": [

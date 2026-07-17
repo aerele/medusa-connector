@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Aerele and contributors
+# Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 
 import secrets
@@ -6,8 +6,8 @@ from urllib.parse import urlparse
 
 import frappe
 import requests
+from ecommerce_core.controllers.setting import ERPNextWarehouse, IntegrationWarehouse, SettingController
 from frappe import _
-from frappe.model.document import Document
 from frappe.utils import cint, get_datetime, now_datetime
 
 from medusa_connector.constants import DEFAULT_PAGE_LIMIT
@@ -21,7 +21,7 @@ CONNECTION_VERIFY_FIELDS = (
 )
 
 
-class MedusaSettings(Document):
+class MedusaSettings(SettingController):
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 
@@ -78,7 +78,6 @@ class MedusaSettings(Document):
 		sync_old_orders: DF.Check
 		sync_sales_invoice: DF.Check
 		update_erpnext_stock_levels_to_medusa: DF.Check
-		update_medusa_item_on_update: DF.Check
 		upload_erpnext_items: DF.Check
 		upload_variants_as_items: DF.Check
 		warehouse: DF.Link | None
@@ -103,6 +102,19 @@ class MedusaSettings(Document):
 		self._seed_warehouse_mapping_if_needed()
 		self._validate_inventory_settings()
 		self._validate_old_orders_settings()
+
+	def is_enabled(self) -> bool:
+		return bool(cint(self.enabled))
+
+	def get_erpnext_to_integration_wh_mapping(
+		self,
+	) -> dict[ERPNextWarehouse, IntegrationWarehouse]:
+		return self.get_erpnext_to_medusa_wh_mapping()
+
+	def get_integration_to_erpnext_wh_mapping(
+		self,
+	) -> dict[IntegrationWarehouse, ERPNextWarehouse]:
+		return self.get_medusa_to_erpnext_wh_mapping()
 
 	def on_update(self) -> None:
 		if self.flags.get("ignore_webhook_sync") or not self.enabled:

@@ -1,4 +1,4 @@
 # Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 
-"""Inbound webhook pipeline: receive (api) → dispatch → domain handlers."""
+"""Product domain: import, export, inventory push, mapping, and webhooks."""
