@@ -27,7 +27,6 @@ _LOADED = False
 _HANDLER_MODULES = (
 	"medusa_connector.product.webhook",
 	"medusa_connector.product.inventory_webhook",
-	"medusa_connector.customer.webhook",
 	"medusa_connector.order.webhook",
 	"medusa_connector.webhook.stubs",
 )

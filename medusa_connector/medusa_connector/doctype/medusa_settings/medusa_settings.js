@@ -56,7 +56,7 @@ function toggle_buttons(frm) {
 			__("Sync Inventory Now"),
 			() => {
 				frappe.call({
-					method: "medusa_connector.medusa_connector.doctype.medusa_settings.medusa_settings.sync_inventory_now",
+					method: "medusa_connector.product.inventory_export.sync_inventory_now",
 					freeze: true,
 					freeze_message: __("Pushing ERPNext stock levels to Medusa…"),
 					callback: (r) => {

@@ -22,12 +22,9 @@ webhooks correctly configured without inventing duplicates.
 
 from __future__ import annotations
 
-from urllib.parse import urlsplit
-
 import frappe
 from frappe.utils import now_datetime
 
-from medusa_connector.constants import RECEIVER_METHOD
 from medusa_connector.medusa.client import MedusaClient
 from medusa_connector.medusa.exceptions import MedusaConnectorError
 from medusa_connector.webhook.registry import registered_events
@@ -313,40 +310,32 @@ class WebhookSyncService:
 		return healed
 
 	def _is_ours(self, webhook: dict) -> bool:
-		"""Return True only for subscriptions managed by this connector.
-
-		Ownership signals (any one is enough):
-		- callback path is our unique receiver method
-		- full base endpoint matches the current site receiver URL
-		- id was previously recorded in Medusa Settings (site URL may have changed)
-		"""
+		"""Return True only for webhooks owned by this ERPNext site."""
 		if not webhook:
 			return False
 
-		wid = webhook.get("id")
-		if wid and wid in self._known_ids:
+		# Strong ownership signal:
+		# This webhook was previously registered and stored by this site.
+		webhook_id = webhook.get("id")
+		if webhook_id and webhook_id in self._known_ids:
 			return True
 
 		target = webhook.get("target_url") or webhook.get("targetUrl") or ""
 		if not target:
 			return False
-
-		path = urlsplit(target).path.rstrip("/")
-		receiver_path = RECEIVER_METHOD.rstrip("/")
-		if path == receiver_path or path.endswith(receiver_path):
-			return True
-
-		return strip_query(target) == strip_query(self.base_endpoint)
+		return strip_query(target).rstrip("/") == self.base_endpoint.rstrip("/")
 
 	@staticmethod
 	def _is_correct(webhook: dict, event: str, target_url: str) -> bool:
-		"""True when event, callback URL (incl. secret/token), and active match."""
+		"""Return True when the webhook exactly matches the desired configuration."""
 		event_type = webhook.get("event_type") or webhook.get("eventType")
 		stored_url = webhook.get("target_url") or webhook.get("targetUrl") or ""
 		active = webhook.get("active")
-		# Treat missing ``active`` as True for older plugin payloads.
+
+		# Older plugin payloads may not return active.
 		if active is None:
 			active = True
+
 		return event_type == event and stored_url == target_url and bool(active)
 
 	# -- persistence ---------------------------------------------------
@@ -423,4 +412,11 @@ def scheduled_webhook_sync() -> None:
 	"""Hourly scheduler hook: heal webhook drift while the connector is enabled."""
 	if not frappe.db.get_single_value("Medusa Settings", "enabled"):
 		return
-	WebhookSyncService().sync()
+
+	try:
+		WebhookSyncService().sync()
+	except Exception:
+		frappe.log_error(
+			title="Scheduled webhook sync failed",
+			message=frappe.get_traceback(with_context=True),
+		)
