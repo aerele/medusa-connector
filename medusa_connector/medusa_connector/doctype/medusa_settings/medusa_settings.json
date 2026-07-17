@@ -46,6 +46,7 @@
   "old_orders_from",
   "old_orders_to",
   "section_products",
+  "erpnext_to_medusa_sync_section",
   "item_group",
   "default_stock_uom",
   "price_list",
@@ -592,12 +593,17 @@
    "depends_on": "eval:doc.enabled && doc.connection_status == 'Connected'",
    "fieldname": "section_break_yejw",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "erpnext_to_medusa_sync_section",
+   "fieldtype": "Section Break",
+   "label": "ERPNext to Medusa Sync"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-16 15:32:38.633955",
+ "modified": "2026-07-17 11:42:22.762751",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Settings",
