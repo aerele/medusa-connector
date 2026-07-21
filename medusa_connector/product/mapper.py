@@ -1,6 +1,5 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
-
 """Map Medusa Admin Product payloads to ERPNext-oriented dicts (no side effects).
 
 Field sources follow Medusa Admin API Product / Product Variant models:
@@ -22,136 +21,114 @@ class ProductMapper:
 	def __init__(self, settings=None) -> None:
 		self.settings = settings or frappe.get_cached_doc(SETTING_DOCTYPE)
 
+	@staticmethod
+	def _validate(product: dict) -> None:
+		"""Validate required Medusa product fields."""
+		if not product.get("id"):
+			raise ValueError("Medusa product payload does not contain an id")
+
+	@staticmethod
+	def _metadata(source: dict | None) -> dict[str, object]:
+		if not isinstance(source, dict):
+			return {}
+		metadata = source.get("metadata")
+		return metadata if isinstance(metadata, dict) else {}
+
 	def map(self, product: dict) -> dict:
 		"""Map a complete Medusa product payload to a template + variants structure."""
+		self._validate(product)
+
 		product_id = product.get("id")
-		if not product_id:
-			raise ValueError("Medusa product payload does not contain an id")
+		title = product.get("title")
+		subtitle = product.get("subtitle") or ""
+		handle = product.get("handle")
+		status = str(product.get("status") or "draft").strip().lower()
+		thumbnail = product.get("thumbnail")
+		material = product.get("material")
+		discountable = product.get("discountable")
+		external_id = product.get("external_id")
+		updated_at = product.get("updated_at")
 
 		options = product.get("options") or []
 		variants = product.get("variants") or []
-		metadata = product.get("metadata") if isinstance(product.get("metadata"), dict) else {}
+		metadata = self._metadata(product)
 
-		description = self._build_description(product)
-		item_group = self._map_item_group(product)
-		stock_uom = self.settings.get("default_stock_uom") or DEFAULT_STOCK_UOM
-		warehouse = self.settings.get("warehouse")
 		has_variants = self._has_variants(options, variants)
-
-		primary_sku = None
 		primary_variant = variants[0] if variants else None
-		if not has_variants and primary_variant:
-			primary_sku = primary_variant.get("sku")
 
-		preferred_code = metadata.get("erpnext_item_code") if metadata else None
+		primary_sku = primary_variant.get("sku") if primary_variant else None
+		inventory_item_id = (
+			self._inventory_item_id(primary_variant) if (not has_variants and primary_variant) else None
+		)
+		barcode = self._barcode(primary_variant) if (not has_variants and primary_variant) else None
 
-		inventory_item_id = None
-		if not has_variants and primary_variant:
-			inventory_item_id = self._inventory_item_id(primary_variant)
-
-		# Product-level dimensions / customs (Admin Product model).
-		dims = self._dimensions(product)
-		if not has_variants and primary_variant:
-			# Prefer variant dimensions when present (documented on ProductVariant).
-			v_dims = self._dimensions(primary_variant)
-			for key, value in v_dims.items():
-				if value is not None:
-					dims[key] = value
-
-		# Admin API: Product.hs_code (product-level) and ProductVariant.hs_code
-		# (variant-level) are independent fields.
-		# - Template Item ← product-level only
-		# - Item Variant ← own hs_code, else product-level, else blank
+		# Dimensions & Customs
+		dims = self._resolve_product_dimensions(product, primary_variant, has_variants)
 		product_hs = self._extract_hs_code(product, metadata)
-		if has_variants:
-			hs_code = product_hs
-		else:
-			# Single sellable SKU: variant-level first, else product-level.
-			own = self._extract_hs_code(primary_variant) if primary_variant else None
-			hs_code = own or product_hs
-		barcode = None
-		if not has_variants and primary_variant:
-			barcode = self._barcode(primary_variant)
+		hs_code = self._resolve_hs_code(primary_variant, product_hs, has_variants)
 
-		product_type = self._product_type(product)
-		collection = self._collection_title(product)
-		brand = self._brand_name(product, metadata)
-		tags = self._tags(product)
-		categories = self._categories(product)
+		# Classifications & Media
 		images = self._all_image_urls(product)
-		thumbnail = product.get("thumbnail") or (images[0] if images else None)
+		thumbnail = thumbnail or (images[0] if images else None)
 
-		is_giftcard = bool(product.get("is_giftcard"))
-		status = str(product.get("status") or "draft").strip().lower()
-		# published → active Item; draft/proposed/rejected → disabled
+		# Status & Inventory Settings
 		disabled = 0 if status == "published" else 1
+		manage_inventory = self._resolve_manage_inventory(
+			variants,
+			primary_variant,
+			has_variants,
+		)
+		is_stock_item = self._is_stock_item(manage_inventory=manage_inventory)
 
-		# Maintain Stock (is_stock_item) only when Medusa Manage Inventory is on.
-		if has_variants:
-			# Template: enable stock if any sellable variant manages inventory;
-			# each variant Item still gets its own flag in ``_map_variant``.
-			manage_inventory = any(self._manage_inventory_enabled(v) for v in variants)
-		else:
-			manage_inventory = self._manage_inventory_enabled(primary_variant)
-		is_stock_item = self._is_stock_item(manage_inventory=manage_inventory, is_giftcard=is_giftcard)
+		item_code = self._resolve_item_code(
+			title=title,
+			product_id=product_id,
+			primary_sku=primary_sku,
+			has_variants=has_variants,
+		)
 
 		return {
 			"medusa_product_id": product_id,
-			"item_code": preferred_code or primary_sku or product_id,
-			"item_name": (product.get("title") or product_id)[:140],
-			"subtitle": product.get("subtitle") or "",
-			"description": description,
-			"handle": product.get("handle"),
+			"item_code": item_code,
+			"item_name": (title or product_id)[:140],
+			"subtitle": subtitle,
+			"description": self._build_description(product),
+			"handle": handle,
 			"raw_status": status,
 			"disabled": disabled,
 			"image": thumbnail,
 			"images": images,
-			"item_group": item_group,
-			"stock_uom": stock_uom,
-			"default_warehouse": warehouse,
+			"item_group": self._map_item_group(product),
+			"stock_uom": self.settings.get("default_stock_uom") or DEFAULT_STOCK_UOM,
+			"default_warehouse": self.settings.get("warehouse"),
 			"has_variants": int(has_variants),
-			"sku": primary_sku,
+			# Template rows never carry a variant's sku — ItemService already
+			# ignores this field when has_variants=1, but we don't hand it a
+			# value that implies otherwise.
+			"sku": None if has_variants else primary_sku,
 			"barcode": barcode,
 			"standard_rate": self._primary_price(primary_variant) if not has_variants else 0,
 			"prices": self._prices(primary_variant) if not has_variants else [],
 			"medusa_variant_id": None if has_variants else (primary_variant or {}).get("id"),
 			"medusa_inventory_item_id": inventory_item_id,
-			# Product-level HSN for the ERPNext template (or simple Item).
 			"gst_hsn_code": hs_code,
 			"product_hs_code": product_hs,
-			"mid_code": (primary_variant or product).get("mid_code")
-			if not has_variants
-			else product.get("mid_code"),
-			"origin_country": (primary_variant or product).get("origin_country")
-			if not has_variants
-			else product.get("origin_country"),
-			"material": product.get("material")
-			or ((primary_variant or {}).get("material") if not has_variants else None),
+			"material": material or ((primary_variant or {}).get("material") if not has_variants else None),
 			"weight": dims.get("weight"),
 			"length": dims.get("length"),
 			"width": dims.get("width"),
 			"height": dims.get("height"),
-			"is_giftcard": is_giftcard,
 			"manage_inventory": manage_inventory,
 			"is_stock_item": is_stock_item,
-			"discountable": product.get("discountable"),
-			"external_id": product.get("external_id"),
-			"product_type": product_type,
-			"collection": collection,
-			"brand": brand,
-			"categories": categories,
-			"tags": tags,
+			"discountable": discountable,
+			"external_id": external_id,
+			"product_type": self._product_type(product),
+			"collection": self._collection_title(product),
+			"brand": self._brand_name(product, metadata),
+			"categories": self._categories(product),
+			"tags": self._tags(product),
 			"metadata": metadata,
-			"attributes": [
-				{
-					"name": option.get("title"),
-					"values": [
-						value.get("value") for value in option.get("values") or [] if value.get("value")
-					],
-				}
-				for option in options
-				if option.get("title")
-			],
+			"attributes": self._build_product_attributes(options),
 			"variants": [
 				self._map_variant(
 					variant,
@@ -163,8 +140,62 @@ class ProductMapper:
 				for variant in variants
 				if has_variants
 			],
-			"updated_at": product.get("updated_at"),
+			"updated_at": updated_at,
 		}
+
+	# ------------------------------------------------------------------
+	# Extracted map() sub-helpers
+	# ------------------------------------------------------------------
+	@staticmethod
+	def _resolve_item_code(
+		*, title: str | None, product_id: str, primary_sku: str | None, has_variants: bool
+	) -> str:
+		"""Resolve the ERPNext item_code candidate for the template/simple item.
+
+		Templates: title → product_id. Never a variant's sku — a template
+		represents the whole product, not any one of its variants.
+		Simple items: sku → title → product_id (sku is the natural item_code
+		when there's exactly one sellable variant).
+		"""
+		if has_variants:
+			return title or product_id
+		return primary_sku or title or product_id
+
+	@staticmethod
+	def _resolve_product_dimensions(product: dict, primary_variant: dict | None, has_variants: bool) -> dict:
+		"""Resolve base dimensions, layering variant configurations on single-variant structures."""
+		if has_variants or not primary_variant:
+			return ProductMapper._dimensions(product)
+		return ProductMapper._merge_dimensions(product, primary_variant)
+
+	@staticmethod
+	def _resolve_hs_code(
+		primary_variant: dict | None, product_hs: str | None, has_variants: bool
+	) -> str | None:
+		"""Resolve proper HSN fallback rules depending on variant structures."""
+		if has_variants:
+			return product_hs
+		own = ProductMapper._extract_hs_code(primary_variant) if primary_variant else None
+		return own or product_hs
+
+	@staticmethod
+	def _resolve_manage_inventory(variants: list, primary_variant: dict | None, has_variants: bool) -> bool:
+		"""Check whether inventory tracking is active for the target structure."""
+		if has_variants:
+			return any(ProductMapper._manage_inventory_enabled(v) for v in variants)
+		return ProductMapper._manage_inventory_enabled(primary_variant)
+
+	@staticmethod
+	def _build_product_attributes(options: list) -> list[dict]:
+		"""Format top-level variant configurations options list."""
+		return [
+			{
+				"name": option.get("title"),
+				"values": [value.get("value") for value in option.get("values") or [] if value.get("value")],
+			}
+			for option in options
+			if option.get("title")
+		]
 
 	# ------------------------------------------------------------------
 	# Mapping helpers
@@ -186,6 +217,15 @@ class ProductMapper:
 		if collection:
 			return collection
 		return self.settings.get("item_group") or DEFAULT_ITEM_GROUP
+
+	@staticmethod
+	def _merge_dimensions(base: dict | None, override: dict | None) -> dict:
+		"""Return dimensions from base overridden by non-null values from override."""
+		merged = ProductMapper._dimensions(base)
+		for key, value in ProductMapper._dimensions(override).items():
+			if value is not None:
+				merged[key] = value
+		return merged
 
 	@staticmethod
 	def _categories(product: dict) -> list[dict]:
@@ -220,7 +260,6 @@ class ProductMapper:
 
 	@staticmethod
 	def _brand_name(product: dict, metadata: dict) -> str | None:
-		# Brand is not a core Product field; common patterns: metadata.brand or linked brand.
 		brand = product.get("brand")
 		if isinstance(brand, dict):
 			return brand.get("name") or brand.get("title")
@@ -251,16 +290,17 @@ class ProductMapper:
 
 	@staticmethod
 	def _has_variants(options: list, variants: list) -> bool:
-		"""Detect ERPNext template products (multiple sellable variants)."""
-		if not options or not variants:
-			return False
-		if len(variants) > 1:
-			return True
-		for option in options:
-			values = [v.get("value") for v in option.get("values") or [] if v.get("value")]
-			if len(values) > 1:
-				return True
-		return False
+		"""Detect ERPNext template products (i.e. products with more than
+		one real, sellable Medusa variant).
+
+		This looks ONLY at the actual `variants` array, never at option
+		*definitions* — option values can be stale or "planned" (edited in
+		Medusa without regenerating variants), which would misclassify
+		genuinely single-variant products as templates. The only thing that
+		determines ERPNext template vs. simple-item structure is how many
+		sellable variants exist.
+		"""
+		return len(variants) > 1
 
 	@staticmethod
 	def _first_image_url(product: dict) -> str | None:
@@ -282,7 +322,7 @@ class ProductMapper:
 		return urls
 
 	@staticmethod
-	def _dimensions(source: dict | None) -> dict:
+	def _dimensions(source: dict | None) -> dict[str, float | None]:
 		if not source:
 			return {}
 		return {
@@ -341,7 +381,6 @@ class ProductMapper:
 			)
 		if out:
 			return out
-		# Fallback: calculated_price (storefront-oriented responses)
 		calc = variant.get("calculated_price") or {}
 		if calc.get("calculated_amount") is not None:
 			return [
@@ -362,48 +401,11 @@ class ProductMapper:
 		product_hs: str | None = None,
 		disabled: int = 0,
 	) -> dict:
-		values_by_option_id = {
-			value.get("option_id"): value.get("value")
-			for value in variant.get("options") or []
-			if value.get("option_id") and value.get("value")
-		}
-		# Medusa v2 nests the option object: options[].option.title
-		values_by_title: dict[str, str] = {}
-		for value in variant.get("options") or []:
-			if not value.get("value"):
-				continue
-			option_obj = value.get("option")
-			title = None
-			if isinstance(option_obj, dict):
-				title = option_obj.get("title")
-			elif isinstance(option_obj, str):
-				title = option_obj
-			title = title or value.get("title")
-			if title:
-				values_by_title[title] = value.get("value")
-
-		attributes = {}
-		for option in options:
-			title = option.get("title")
-			if not title:
-				continue
-			val = values_by_option_id.get(option.get("id")) or values_by_title.get(title)
-			if val:
-				attributes[title] = val
-
-		dims = self._dimensions(variant)
-		# Fall back to product-level dimensions.
-		p_dims = self._dimensions(product)
-		for key, value in p_dims.items():
-			if dims.get(key) is None and value is not None:
-				dims[key] = value
-
-		# Maintain Stock only when this Medusa variant has Manage Inventory on.
+		attributes = self._extract_variant_attributes(variant, options)
+		dims = self._resolve_variant_dimensions(variant, product)
 		manage_inventory = self._manage_inventory_enabled(variant)
-		is_stock_item = self._is_stock_item(
-			manage_inventory=manage_inventory,
-			is_giftcard=bool(product.get("is_giftcard")),
-		)
+		is_stock_item = self._is_stock_item(manage_inventory=manage_inventory)
+		variant_hs = self._extract_hs_code(variant)
 
 		return {
 			"medusa_variant_id": variant.get("id"),
@@ -419,23 +421,60 @@ class ProductMapper:
 			"length": dims.get("length"),
 			"width": dims.get("width"),
 			"height": dims.get("height"),
-			# Own Admin ProductVariant.hs_code only (may differ per variant).
-			"gst_hsn_code": self._extract_hs_code(variant),
-			"has_variant_hs_code": bool(self._extract_hs_code(variant)),
-			# Product-level HSN for inheritance when variant has none.
+			"gst_hsn_code": variant_hs,
+			"has_variant_hs_code": bool(variant_hs),
 			"product_hs_code": product_hs,
-			"mid_code": variant.get("mid_code") or product.get("mid_code"),
-			"origin_country": variant.get("origin_country") or product.get("origin_country"),
 			"material": variant.get("material") or product.get("material"),
 			"manage_inventory": manage_inventory,
 			"is_stock_item": is_stock_item,
 			"allow_backorder": variant.get("allow_backorder"),
-			# Follow parent Medusa product status (draft → disabled, published → enabled).
 			"disabled": int(disabled),
-			"metadata": variant.get("metadata") if isinstance(variant.get("metadata"), dict) else {},
+			"metadata": self._metadata(variant),
 			"medusa_inventory_item_id": self._inventory_item_id(variant),
 			"attributes": attributes,
 		}
+
+	# ------------------------------------------------------------------
+	# Extracted _map_variant() sub-helpers
+	# ------------------------------------------------------------------
+	@staticmethod
+	def _extract_variant_attributes(variant: dict, options: list[dict]) -> dict:
+		"""Parse options out of variant blocks into a {option_title: value} map.
+
+		Builds both the option_id-keyed and title-keyed lookup tables in a
+		single pass over ``variant["options"]`` instead of two separate
+		passes — matters when variants carry many option values.
+		"""
+		values_by_option_id: dict[str, str] = {}
+		values_by_title: dict[str, str] = {}
+
+		for value in variant.get("options") or []:
+			val = value.get("value")
+			if not val:
+				continue
+			option_id = value.get("option_id")
+			if option_id:
+				values_by_option_id[option_id] = val
+			option_obj = value.get("option")
+			title = option_obj.get("title") if isinstance(option_obj, dict) else option_obj
+			title = title or value.get("title")
+			if title:
+				values_by_title[title] = val
+
+		attributes = {}
+		for option in options:
+			title = option.get("title")
+			if not title:
+				continue
+			val = values_by_option_id.get(option.get("id")) or values_by_title.get(title)
+			if val:
+				attributes[title] = val
+		return attributes
+
+	@staticmethod
+	def _resolve_variant_dimensions(variant: dict, product: dict) -> dict:
+		"""Resolve specific variant dimensions with product-level fallback layers."""
+		return ProductMapper._merge_dimensions(product, variant)
 
 	@staticmethod
 	def _manage_inventory_enabled(variant: dict | None) -> bool:
@@ -445,19 +484,13 @@ class ProductMapper:
 		return bool(variant.get("manage_inventory"))
 
 	@staticmethod
-	def _is_stock_item(*, manage_inventory: bool, is_giftcard: bool = False) -> int:
-		"""ERPNext Maintain Stock only when Medusa manages inventory (never for gift cards)."""
-		if is_giftcard:
-			return 0
+	def _is_stock_item(*, manage_inventory: bool) -> int:
+		"""ERPNext Maintain Stock only when Medusa manages inventory."""
 		return 1 if manage_inventory else 0
 
 	@staticmethod
 	def _extract_hs_code(*sources: dict | None) -> str | None:
-		"""Return first non-empty ``hs_code`` from the given Medusa dicts only.
-
-		Admin API: Product and ProductVariant each have their own ``hs_code``
-		field. Callers choose the source list (variant-only vs product-only).
-		"""
+		"""Return first non-empty ``hs_code`` from the given Medusa dicts only."""
 		for source in sources:
 			if not isinstance(source, dict):
 				continue
@@ -484,6 +517,7 @@ class ProductMapper:
 			name = f"{product_title} - {variant_title}"
 		else:
 			name = variant_title or product_title
+
 		return (name or variant.get("id") or "Item")[:140]
 
 	@staticmethod

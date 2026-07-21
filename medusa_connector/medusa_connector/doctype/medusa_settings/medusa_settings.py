@@ -67,7 +67,6 @@ class MedusaSettings(Document):
 		medusa_store_id: DF.Data | None
 		old_orders_from: DF.Datetime | None
 		old_orders_to: DF.Datetime | None
-		on_item_delete: DF.Literal["Draft", "Delete"]
 		price_list: DF.Link | None
 		sales_invoice_series: DF.Literal[None]
 		sales_order_series: DF.Literal[None]
@@ -95,10 +94,6 @@ class MedusaSettings(Document):
 		if not self.enabled:
 			self._mark_disconnected()
 			return
-
-		from medusa_connector.setup import setup_custom_fields
-
-		setup_custom_fields(update=True)
 
 		if self._connection_settings_changed():
 			self._verify_connection()
@@ -375,14 +370,6 @@ def regenerate_webhook_secret() -> str:
 
 
 @frappe.whitelist()
-def test_connection() -> dict:
-	"""Test the Medusa connection and refresh store defaults."""
-	from medusa_connector.medusa.client import test_connection as _test
-
-	return _test()
-
-
-@frappe.whitelist()
 def refresh_store_defaults() -> dict:
 	"""Re-fetch store defaults from Medusa."""
 	frappe.only_for("System Manager")
@@ -396,11 +383,3 @@ def refresh_store_defaults() -> dict:
 		"message": _("Store defaults updated."),
 		"defaults": defaults,
 	}
-
-
-@frappe.whitelist()
-def sync_inventory_now() -> dict:
-	"""Push ERPNext stock levels to Medusa once."""
-	from medusa_connector.product.inventory_export import sync_inventory_now as _sync
-
-	return _sync()

@@ -85,40 +85,39 @@ def update_sync_log(
 	traceback: str | None = None,
 	complete: bool = False,
 ) -> None:
-	"""Update an existing Ecommerce Integration Log row."""
 	if not name or not frappe.db.exists("Ecommerce Integration Log", name):
 		return
 
 	frappe.flags.request_id = name
-	response: dict = {}
-	if summary is not None:
-		response["summary"] = summary
-	if created is not None:
-		response["created"] = created
-	if updated is not None:
-		response["updated"] = updated
-	if failed is not None:
-		response["failed"] = failed
-	if skipped is not None:
-		response["skipped"] = skipped
-	if failed_ids is not None:
-		response["failed_ids"] = failed_ids
+
+	response = {
+		"summary": summary,
+		"created": created,
+		"updated": updated,
+		"failed": failed,
+		"skipped": skipped,
+		"failed_ids": failed_ids,
+	}
+	response = {k: v for k, v in response.items() if v is not None}
+
 	if complete:
 		response["completed_at"] = str(now_datetime())
 
-	kwargs = {
-		"make_new": False,
-		"status": status or "Success",
-		"message": message,
-		"response_data": response or None,
-	}
 	if traceback:
-		# create_log only auto-fills traceback from frappe.get_traceback on save;
-		# set explicitly when provided.
-		log = frappe.get_doc("Ecommerce Integration Log", name)
-		log.db_set("traceback", traceback, update_modified=False)
+		frappe.db.set_value(
+			"Ecommerce Integration Log",
+			name,
+			"traceback",
+			traceback,
+			update_modified=False,
+		)
 
-	create_medusa_log(**{k: v for k, v in kwargs.items() if v is not None})
+	create_medusa_log(
+		make_new=False,
+		status=status or "Success",
+		message=message,
+		response_data=response or None,
+	)
 
 
 def webhook_message_key(event_id: str) -> str:

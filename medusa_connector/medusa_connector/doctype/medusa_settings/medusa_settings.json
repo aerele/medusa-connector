@@ -55,7 +55,6 @@
   "update_medusa_item_on_update",
   "sync_new_item_as_published",
   "upload_variants_as_items",
-  "on_item_delete",
   "section_product_status",
   "last_product_sync",
   "last_product_sync_message",
@@ -201,6 +200,7 @@
    "fieldname": "customer_group",
    "fieldtype": "Link",
    "label": "Customer Group",
+   "link_filters": "[[\"Customer Group\", \"is_group\", \"=\", 0]]",
    "options": "Customer Group"
   },
   {
@@ -436,15 +436,6 @@
    "label": "Upload ERPNext Item Variants to Medusa"
   },
   {
-   "default": "Draft",
-   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
-   "description": "When an ERPNext Item is deleted, draft or delete the linked Medusa product.",
-   "fieldname": "on_item_delete",
-   "fieldtype": "Select",
-   "label": "On Item Delete",
-   "options": "Draft\nDelete"
-  },
-  {
    "depends_on": "eval:doc.enabled",
    "fieldname": "section_product_status",
    "fieldtype": "Section Break",
@@ -603,7 +594,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-17 11:42:22.762751",
+ "modified": "2026-07-20 11:21:06.990009",
  "modified_by": "Administrator",
  "module": "Medusa Connector",
  "name": "Medusa Settings",

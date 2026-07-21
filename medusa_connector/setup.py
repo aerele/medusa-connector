@@ -3,6 +3,7 @@
 
 """App install helpers (custom fields, one-time setup)."""
 
+import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 from medusa_connector.constants import (
@@ -169,4 +170,11 @@ def setup_custom_fields(update: bool = True) -> None:
 
 
 def after_install() -> None:
-	setup_custom_fields(update=True)
+	try:
+		setup_custom_fields(update=True)
+	except Exception:
+		frappe.log_error(
+			title="Medusa Connector after_install failed",
+			message=frappe.get_traceback(with_context=True),
+		)
+		raise

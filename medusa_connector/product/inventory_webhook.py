@@ -1,184 +1,111 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
-
 """Inventory Item webhooks (Medusa Inventory module → ERPNext Item fields).
 
-Qty is **not** written here — ERPNext is stock master. This only maps inventory
-item attributes onto ERPNext Items via Ecommerce Item (variant/SKU).
+Qty is **not** written here — ERPNext is stock master. This only maps
+inventory item attributes onto ERPNext Items via Ecommerce Item (variant/SKU).
+
+Resolution is a single lookup against the existing Ecommerce Item mapping.
+If no mapping exists yet (e.g. this event arrived before the product was
+synced), the event is logged and skipped — it is not retried, resynced, or
+guessed at here. The next product sync or a redelivered webhook resolves it.
 """
 
 from __future__ import annotations
 
-import time
-
 import frappe
-from frappe.utils import cstr
+from ecommerce_core.ecommerce_core.doctype.ecommerce_item.ecommerce_item import get_erpnext_item
 
 from medusa_connector.constants import MODULE_NAME
 from medusa_connector.medusa.inventory import InventoryService
-from medusa_connector.medusa.product import ProductService
-from medusa_connector.product.mapper import ProductMapper
+from medusa_connector.product.services.persistence import PersistenceService
 from medusa_connector.product.sync import ProductSync
 from medusa_connector.utils.sync_guard import inbound_sync
 from medusa_connector.webhook.base import BaseHandler, MedusaEvent
 from medusa_connector.webhook.registry import register
 
-_RESOLVE_ATTEMPTS = 3
-_RESOLVE_DELAY_SEC = 0.75
 
-
-@register("inventory-item.created", "inventory-item.updated", "inventory-item.deleted")
+@register("inventory-item.updated")
 class InventoryItemHandler(BaseHandler):
 	"""Sync Medusa Inventory Item field changes to ERPNext Items."""
 
 	def __init__(
 		self,
 		inventory: InventoryService | None = None,
-		products: ProductService | None = None,
 		sync: ProductSync | None = None,
+		persistence: PersistenceService | None = None,
 	) -> None:
 		self.inventory = inventory or InventoryService()
-		self.products = products or ProductService()
 		self.sync = sync or ProductSync()
+		self.persistence = persistence or PersistenceService()
 
 	def process(self, event: MedusaEvent, entity: dict) -> str | None:
 		inventory_item_id = event.entity_id or (entity or {}).get("id")
 		if not inventory_item_id:
 			return f"{event.name}: missing inventory item id"
 
-		if event.name == "inventory-item.deleted":
-			return f"inventory-item.deleted: {inventory_item_id} (no ERP qty change)"
-
-		inv = self._fetch_inventory_item(inventory_item_id)
+		inv = self.inventory.get_inventory_item(inventory_item_id)
 		if not inv or not inv.get("id"):
 			return f"{event.name}: inventory item {inventory_item_id} not found in Medusa"
 
-		item_codes = self._resolve_erpnext_item_codes(inv)
-		if not item_codes:
-			product_ids = self._product_ids_from_inventory(inv)
-			for product_id in product_ids:
-				self._resync_product(product_id)
-			item_codes = self._resolve_erpnext_item_codes(inv)
-			if not item_codes:
-				return (
-					f"{event.name}: no ERPNext Item for inventory {inventory_item_id} "
-					f"(sku={inv.get('sku') or '-'})"
-				)
+		items = self._resolve_erpnext_items(inv)
+		if not items:
+			return (
+				f"{event.name}: no ERPNext Item mapping for inventory {inventory_item_id} "
+				f"(sku={inv.get('sku') or '-'})"
+			)
 
 		updated = []
 		with inbound_sync():
-			for item_code in item_codes:
-				if not frappe.db.exists("Item", item_code):
-					continue
-				item = frappe.get_doc("Item", item_code)
+			for item in items:
 				changed = self.sync.apply_inventory_item_fields(item, inv)
 				if changed:
-					self.sync._save_item(item)
-					updated.append(item_code)
+					self.persistence.save_item(item)
+					updated.append(item.name)
 
+		item_names = ", ".join(item.name for item in items)
 		return (
 			f"{event.name}: inventory {inventory_item_id} → "
 			f"{', '.join(updated) if updated else 'no field changes'} "
-			f"(items={', '.join(item_codes) or '-'})"
+			f"(items={item_names or '-'})"
 		)
 
-	def _fetch_inventory_item(self, inventory_item_id: str) -> dict:
-		last_err = None
-		for attempt in range(_RESOLVE_ATTEMPTS):
-			try:
-				inv = self.inventory.get_inventory_item(inventory_item_id)
-				if inv and inv.get("id"):
-					return inv
-			except Exception as exc:
-				last_err = exc
-				frappe.logger("medusa_connector").warning(
-					f"inventory-item fetch attempt {attempt + 1} for {inventory_item_id}: {exc}"
-				)
-			if attempt + 1 < _RESOLVE_ATTEMPTS:
-				time.sleep(_RESOLVE_DELAY_SEC)
-		if last_err:
-			raise last_err
-		return {}
+	def _resolve_erpnext_items(self, inv: dict) -> list:
+		"""Resolve ERPNext Item documents linked to this Medusa inventory item.
 
-	def _product_ids_from_inventory(self, inv: dict) -> list[str]:
-		ids: list[str] = []
-		for variant in inv.get("variants") or []:
-			if not isinstance(variant, dict):
-				continue
-			pid = variant.get("product_id") or (variant.get("product") or {}).get("id")
-			if pid and pid not in ids:
-				ids.append(pid)
-		sku = (inv.get("sku") or "").strip()
-		if not ids and sku:
-			from medusa_connector.product.item_mapping import (
-				fetch_product_id_for_variant,
-				get_medusa_product_id_from_row,
-			)
-
-			for row in frappe.get_all(
-				"Ecommerce Item",
-				filters={"integration": MODULE_NAME, "sku": sku},
-				fields=["integration_item_code", "variant_id", "variant_of", "has_variants"],
-			):
-				pid = get_medusa_product_id_from_row(row, fetch_if_missing=False)
-				if not pid:
-					vid = row.variant_id or (
-						row.integration_item_code
-						if cstr(row.integration_item_code).startswith("variant_")
-						else None
-					)
-					pid = fetch_product_id_for_variant(vid) if vid else None
-				if pid and pid not in ids:
-					ids.append(pid)
-		return ids
-
-	def _resync_product(self, product_id: str) -> str:
-		product = self.products.get_product(product_id)
-		mapped = ProductMapper().map(product)
-		result = self.sync.sync(mapped, force=True)
-		return result.get("item_code") or product_id
-
-	def _resolve_erpnext_item_codes(self, inv: dict) -> list[str]:
-		codes: list[str] = []
+		Uses ``get_erpnext_item`` — the same Ecommerce Item lookup every other
+		connector on this site uses — instead of a connector-local re-query.
+		A stale Ecommerce Item mapping (pointing at a deleted Item) is skipped
+		rather than raised, since a dangling mapping is a data-state issue,
+		not something this webhook should fail on.
+		"""
+		items = []
 		seen: set[str] = set()
 
-		def _add(code: str | None) -> None:
-			if code and code not in seen and frappe.db.exists("Item", code):
-				seen.add(code)
-				codes.append(code)
+		def _add(item_doc) -> None:
+			if item_doc and item_doc.name not in seen:
+				seen.add(item_doc.name)
+				items.append(item_doc)
 
 		for variant in inv.get("variants") or []:
 			if not isinstance(variant, dict):
 				continue
-			vid = variant.get("id")
-			if vid:
-				_add(
-					frappe.db.get_value(
-						"Ecommerce Item",
-						{"integration": MODULE_NAME, "variant_id": vid},
-						"erpnext_item_code",
-					)
-				)
+			variant_id = variant.get("id")
 			sku = variant.get("sku")
-			if sku:
-				_add(
-					frappe.db.get_value(
-						"Ecommerce Item",
-						{"integration": MODULE_NAME, "sku": sku},
-						"erpnext_item_code",
-					)
-				)
-				_add(sku if frappe.db.exists("Item", sku) else None)
+			if not (variant_id or sku):
+				continue
+			product_id = variant.get("product_id") or (variant.get("product") or {}).get("id") or ""
+			try:
+				_add(get_erpnext_item(MODULE_NAME, product_id, variant_id=variant_id, sku=sku))
+			except frappe.DoesNotExistError:
+				continue
 
-		sku = (inv.get("sku") or "").strip()
-		if sku:
-			_add(
-				frappe.db.get_value(
-					"Ecommerce Item",
-					{"integration": MODULE_NAME, "sku": sku},
-					"erpnext_item_code",
-				)
-			)
-			_add(sku if frappe.db.exists("Item", sku) else None)
+		if not items:
+			top_sku = (inv.get("sku") or "").strip()
+			if top_sku:
+				try:
+					_add(get_erpnext_item(MODULE_NAME, "", sku=top_sku))
+				except frappe.DoesNotExistError:
+					pass
 
-		return codes
+		return items

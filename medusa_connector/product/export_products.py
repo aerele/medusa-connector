@@ -1,74 +1,46 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
-
-"""ERPNext → Medusa product upload (Item document hooks).
-
-Medusa Admin API (verified against OpenAPI / docs.medusajs.com/api/admin):
-
-- ``POST /admin/products`` — AdminCreateProduct
-  - required: ``title``
-  - ``options[].values``: string[]
-  - ``variants[]``: AdminCreateProductVariant — required ``title``, ``prices``
-  - ``variants[].options``: object map ``{OptionTitle: value}``
-  - ``variants[].prices``: ``[{currency_code, amount}]`` (major units)
-  - optional: ``status``, ``description``, ``images[{url}]``, ``sales_channels[{id}]``,
-    ``metadata``, ``external_id``, ``categories[{id}]``, ``tags[{id}]``, ``collection_id``
-- ``POST /admin/products/{id}`` — AdminUpdateProduct
-- ``POST /admin/products/{id}/variants`` — create variant
-- ``POST /admin/products/{id}/variants/{variant_id}`` — update variant
-- ``DELETE /admin/products/{id}`` — delete product
-
-Architecture: Item document hooks gated by settings flags,
-driven by leaf Item create/update (not template), mapping + sync log.
-"""
+"""ERPNext → Medusa product upload (Item document hooks)."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
+
 import frappe
-from frappe.utils import cint, flt, get_url, strip_html
+from frappe.utils import cint, flt, get_url, now, strip_html
 
 from medusa_connector.constants import MODULE_NAME, SETTING_DOCTYPE
 from medusa_connector.medusa.product import ProductService
-from medusa_connector.product.item_mapping import (
-	get_medusa_product_id_from_row,
-	get_medusa_variant_id,
-	upsert_mapping,
-)
 from medusa_connector.utils.logging import create_sync_log, update_sync_log
 from medusa_connector.utils.store_defaults import get_store_defaults
+from medusa_connector.utils.sync_guard import is_inbound_sync
 
 DEFAULT_OPTION_TITLE = "Default option"
 DEFAULT_OPTION_VALUE = "Default variant"
+SYNC_METHOD = "medusa_connector.product.export_products.upload_erpnext_item"
 
 
+# --------------------------------------------------------------------------- #
+# Hook entry point
+# --------------------------------------------------------------------------- #
 def upload_erpnext_item(doc, method: str | None = None) -> None:
 	"""Item after_insert / on_update hook: push to Medusa when settings allow."""
-	from medusa_connector.utils.sync_guard import should_skip_export_for_item
-
-	if getattr(doc, "flags", None) and (doc.flags.get("from_medusa") or doc.flags.get("from_integration")):
-		return
-	# Global inbound flag + short cache after webhook import (covers ERPNext's
-	# update_variants cascade which re-saves variants without doc flags).
-	if should_skip_export_for_item(getattr(doc, "name", None)):
-		return
-	if frappe.flags.in_import or frappe.flags.in_patch or frappe.flags.in_install:
+	if not _is_eligible_for_export(doc):
 		return
 
 	settings = frappe.get_cached_doc(SETTING_DOCTYPE)
-	if not settings.enabled or not settings.get("upload_erpnext_items"):
+	if not settings.enabled or not settings.upload_erpnext_items or doc.has_variants:
 		return
-
-	# Templates are not uploaded directly; leaf items drive upload.
-	if doc.has_variants:
-		return
-
-	if doc.variant_of and not settings.get("upload_variants_as_items"):
+	if doc.variant_of and not settings.upload_variants_as_items:
 		return
 
 	try:
-		if _mapping_exists_for_item(doc.name):
-			if settings.get("update_medusa_item_on_update"):
-				_update_medusa_product(doc, settings)
+		mapping = _get_mapping(doc.name)
+		if mapping:
+			if settings.update_medusa_item_on_update:
+				_update_medusa_product(doc, mapping)
 			return
 		_create_medusa_product(doc, settings)
 	except Exception:
@@ -78,118 +50,50 @@ def upload_erpnext_item(doc, method: str | None = None) -> None:
 		)
 
 
-def archive_erpnext_item(doc, method: str | None = None) -> None:
-	"""Item on_trash: draft or delete the linked Medusa product (settings-gated)."""
-	from medusa_connector.utils.sync_guard import should_skip_export_for_item
+def _is_eligible_for_export(doc) -> bool:
+	flags = doc.flags or {}
 
-	if getattr(doc, "flags", None) and (doc.flags.get("from_medusa") or doc.flags.get("from_integration")):
-		return
-	if should_skip_export_for_item(getattr(doc, "name", None)):
-		return
+	if flags.get("from_medusa") or flags.get("from_integration"):
+		return False
+
+	if is_inbound_sync():
+		return False
+
 	if frappe.flags.in_import or frappe.flags.in_patch or frappe.flags.in_install:
-		return
+		return False
 
-	settings = frappe.get_cached_doc(SETTING_DOCTYPE)
-	if not settings.enabled or not settings.get("upload_erpnext_items"):
-		return
+	return True
 
-	row = frappe.db.get_value(
+
+def _get_mapping(item_code: str) -> dict | None:
+	return frappe.db.get_value(
 		"Ecommerce Item",
-		{"integration": MODULE_NAME, "erpnext_item_code": doc.name},
-		["name", "integration_item_code", "variant_id", "has_variants", "variant_of"],
+		{"integration": MODULE_NAME, "erpnext_item_code": item_code},
+		["name", "integration_item_code", "variant_id", "variant_of", "has_variants"],
 		as_dict=True,
 	)
-	if not row or not row.integration_item_code:
-		return
-
-	service = ProductService()
-	action = settings.get("on_item_delete") or "Draft"
-	variant_id = get_medusa_variant_id(row)
-	product_id = get_medusa_product_id_from_row(row, fetch_if_missing=True)
-	try:
-		# Multi-variant sellable leaf: only touch the Medusa variant.
-		if row.variant_of and variant_id and not cint(row.has_variants) and product_id:
-			if action == "Delete":
-				service.delete_variant(product_id, variant_id)
-			else:
-				service.update_variant(
-					product_id,
-					variant_id,
-					{"metadata": {"erpnext_status": "deleted"}},
-				)
-			return
-
-		# Simple product (or template): draft/delete the Medusa product.
-		if not product_id:
-			product_id = row.integration_item_code if cint(row.has_variants) else None
-			if not product_id and variant_id:
-				product_id = get_medusa_product_id_from_row(row, fetch_if_missing=True)
-		if not product_id:
-			return
-		if action == "Delete":
-			service.delete_product(product_id)
-		else:
-			service.update_product(product_id, {"status": "draft"})
-	except Exception:
-		frappe.log_error(
-			title=f"Medusa archive failed for Item {doc.name}",
-			message=frappe.get_traceback(with_context=True),
-		)
 
 
-def _mapping_exists_for_item(item_code: str) -> bool:
-	return bool(
-		frappe.db.exists("Ecommerce Item", {"integration": MODULE_NAME, "erpnext_item_code": item_code})
-	)
+# --------------------------------------------------------------------------- #
+# Sync-log helper (shared by create / add-variant / update flows)
+# --------------------------------------------------------------------------- #
+@contextmanager
+def _sync_log(message: str, request_data: Any) -> Iterator[str]:
+	"""Open a Running sync log and guarantee a Failed log entry on error.
 
-
-def _create_medusa_product(item, settings) -> None:
-	"""Create a Medusa product, or add a variant to an existing mapped template product."""
-	template = frappe.get_doc("Item", item.variant_of) if item.variant_of else item
-	service = ProductService()
-
-	# Multi-variant: if the template already maps to a Medusa product, add a variant.
-	if item.variant_of:
-		template_map = frappe.db.get_value(
-			"Ecommerce Item",
-			{"integration": MODULE_NAME, "erpnext_item_code": template.name, "has_variants": 1},
-			["integration_item_code"],
-			as_dict=True,
-		)
-		if template_map and template_map.integration_item_code:
-			_add_variant_to_product(item, template, template_map.integration_item_code, settings, service)
-			return
-
-	payload = _build_create_payload(item, template, settings, service)
-
+	Callers are responsible for calling `update_sync_log(..., status="Success", ...)`
+	themselves once the work succeeds; any unhandled exception is logged as
+	Failed here and re-raised.
+	"""
 	log_name = create_sync_log(
 		sync_type="Product Export",
 		status="Running",
-		method="medusa_connector.product.export_products.upload_erpnext_item",
-		message=f"Uploading Item {item.name}",
-		request_data=payload,
+		method=SYNC_METHOD,
+		message=message,
+		request_data=request_data,
 	)
 	try:
-		created = service.create_product(payload)
-		# create may return the product only — re-fetch for full variants/prices if needed
-		product_id = created.get("id")
-		if not product_id:
-			raise frappe.ValidationError("Medusa did not return a product id")
-		if not created.get("variants"):
-			created = service.get_product(product_id)
-
-		from medusa_connector.utils.sync_guard import mark_product_exported
-
-		mark_product_exported(product_id)
-		_write_create_mappings(item, template, created)
-		update_sync_log(
-			log_name,
-			status="Success",
-			message=f"Uploaded {item.name} → {product_id}",
-			created=1,
-			response_data=created,
-			complete=True,
-		)
+		yield log_name
 	except Exception as exc:
 		update_sync_log(
 			log_name,
@@ -202,28 +106,48 @@ def _create_medusa_product(item, settings) -> None:
 		raise
 
 
+# --------------------------------------------------------------------------- #
+# Create flows
+# --------------------------------------------------------------------------- #
+def _create_medusa_product(item, settings) -> None:
+	"""Create a Medusa product, or add a variant to an existing mapped template product."""
+	template = frappe.get_doc("Item", item.variant_of) if item.variant_of else item
+	service = ProductService()
+
+	if item.variant_of:
+		template_product_id = frappe.db.get_value(
+			"Ecommerce Item",
+			{"integration": MODULE_NAME, "erpnext_item_code": template.name, "has_variants": 1},
+			"integration_item_code",
+		)
+		if template_product_id:
+			_add_variant_to_product(item, template, template_product_id, settings, service)
+			return
+
+	payload = _build_create_payload(item, template, settings)
+	with _sync_log(f"Uploading Item {item.name}", payload) as log_name:
+		created = service.create_product(payload)
+		product_id = created.get("id")
+		if not product_id:
+			raise frappe.ValidationError("Medusa did not return product id")
+		_write_create_mappings(item, template, created)
+		update_sync_log(
+			log_name,
+			status="Success",
+			message=f"Uploaded {item.name} → {product_id}",
+			created=1,
+			complete=True,
+		)
+
+
 def _add_variant_to_product(item, template, product_id: str, settings, service: ProductService) -> None:
-	"""``POST /admin/products/{id}/variants`` for an additional ERPNext variant."""
-	# Ensure product options cover this variant's attributes.
-	product = service.get_product(product_id)
-	_ensure_product_options(service, product_id, product, template, item)
-
-	payload = _variant_payload(item, template, settings=settings)
-	log_name = create_sync_log(
-		sync_type="Product Export",
-		status="Running",
-		method="medusa_connector.product.export_products.upload_erpnext_item",
-		message=f"Adding variant {item.name} to {product_id}",
-		request_data=payload,
-	)
-	try:
-		# API returns the product (with variants) per Admin docs / common Medusa shape.
+	"""Add a new variant to an existing product in Medusa."""
+	payload = _variant_payload(item, settings)
+	with _sync_log(f"Adding variant {item.name} to {product_id}", payload) as log_name:
 		result = service.create_variant(product_id, payload)
-		product = result if result.get("variants") else service.get_product(product_id)
-		from medusa_connector.utils.sync_guard import mark_product_exported
-
-		mark_product_exported(product_id)
-		variant_id = _match_variant_id(product, item)
+		variant_id = result.get("id")
+		if not variant_id:
+			raise frappe.ValidationError(f"Medusa did not return variant id for Item {item.name}")
 		upsert_mapping(
 			erpnext_item_code=item.name,
 			medusa_product_id=product_id,
@@ -232,7 +156,6 @@ def _add_variant_to_product(item, template, product_id: str, settings, service: 
 			variant_of=template.name,
 			has_variants=0,
 		)
-		# Keep template mapping active.
 		upsert_mapping(
 			erpnext_item_code=template.name,
 			medusa_product_id=product_id,
@@ -243,333 +166,185 @@ def _add_variant_to_product(item, template, product_id: str, settings, service: 
 			status="Success",
 			message=f"Added variant {item.name} → {variant_id}",
 			created=1,
-			response_data=product,
 			complete=True,
 		)
-	except Exception as exc:
-		update_sync_log(
-			log_name,
-			status="Failed",
-			message=str(exc),
-			failed=1,
-			traceback=frappe.get_traceback(with_context=True),
-			complete=True,
-		)
-		raise
 
 
-def _update_medusa_product(item, settings) -> None:
-	row = frappe.db.get_value(
-		"Ecommerce Item",
-		{"integration": MODULE_NAME, "erpnext_item_code": item.name},
-		["name", "integration_item_code", "variant_id", "variant_of", "has_variants"],
-		as_dict=True,
+def _write_create_mappings(item, template, created: dict) -> None:
+	"""Persist Ecommerce Item mapping(s) for a freshly created Medusa product."""
+	product_id = created["id"]
+	variants = created.get("variants") or []
+	if not variants:
+		frappe.throw(f"Medusa product {product_id} has no variant(s)")
+	variant_id = variants[0].get("id")
+	if not variant_id:
+		frappe.throw(f"Medusa product {product_id} has invalid variant response")
+
+	if item.variant_of:
+		upsert_mapping(erpnext_item_code=template.name, medusa_product_id=product_id, has_variants=1)
+
+	upsert_mapping(
+		erpnext_item_code=item.name,
+		medusa_product_id=product_id,
+		variant_id=variant_id,
+		sku=item.name,
+		variant_of=template.name if item.variant_of else None,
+		has_variants=0,
 	)
-	if not row:
-		return
 
+
+# --------------------------------------------------------------------------- #
+# Update flow
+# --------------------------------------------------------------------------- #
+def _update_medusa_product(item, mapping) -> None:
 	service = ProductService()
 	template = frappe.get_doc("Item", item.variant_of) if item.variant_of else item
-	product_payload = _build_update_product_payload(template if item.variant_of else item, settings)
-	product_id = get_medusa_product_id_from_row(row, fetch_if_missing=True)
-	variant_id = get_medusa_variant_id(row)
+	product_payload = _build_update_product_payload(template)
+	product_id = mapping.integration_item_code
+	variant_id = mapping.get("variant_id")
+	is_template = bool(cint(mapping.has_variants))
 
 	if not product_id:
 		frappe.throw(f"Cannot resolve Medusa product id for Item {item.name}")
+	if not is_template and not variant_id:
+		frappe.throw(f"Missing Medusa variant id for Item {item.name}")
 
-	log_name = create_sync_log(
-		sync_type="Product Export",
-		status="Running",
-		method="medusa_connector.product.export_products.upload_erpnext_item",
-		message=f"Updating Item {item.name}",
-		request_data={"product": product_payload, "item": item.name, "product_id": product_id},
-	)
-	try:
-		updated = service.update_product(product_id, product_payload)
-
-		# Update the sellable variant (simple item or ERPNext variant).
-		if not cint(row.has_variants):
-			if not variant_id:
-				product = service.get_product(product_id)
-				variant_id = _match_variant_id(product, item)
-			if variant_id:
-				variant_payload = _variant_update_payload(item, template, settings=settings)
-				service.update_variant(product_id, variant_id, variant_payload)
-
-		from medusa_connector.utils.sync_guard import mark_product_exported
-
-		mark_product_exported(product_id)
-		if cint(row.has_variants):
-			upsert_mapping(
-				erpnext_item_code=item.name,
-				medusa_product_id=product_id,
-				has_variants=1,
-				status="Disabled" if item.disabled else "Active",
-			)
-		else:
-			upsert_mapping(
-				erpnext_item_code=item.name,
-				medusa_product_id=product_id,
-				variant_id=variant_id,
-				variant_of=row.variant_of or (item.variant_of or None),
-				sku=item.name,
-				has_variants=0,
-				status="Disabled" if item.disabled else "Active",
-			)
+	request_data = {"product": product_payload, "item": item.name, "product_id": product_id}
+	with _sync_log(f"Updating Item {item.name}", request_data) as log_name:
+		service.update_product(product_id, product_payload)
+		upsert_mapping(
+			erpnext_item_code=item.name,
+			medusa_product_id=product_id,
+			variant_id=None if is_template else variant_id,
+			variant_of=None if is_template else (mapping.variant_of or item.variant_of),
+			sku=None if is_template else item.name,
+			has_variants=mapping.has_variants,
+		)
 		update_sync_log(
 			log_name,
 			status="Success",
 			message=f"Updated {item.name} → product {product_id}"
 			+ (f" variant {variant_id}" if variant_id else ""),
 			updated=1,
-			response_data=updated,
 			complete=True,
 		)
-	except Exception as exc:
-		update_sync_log(
-			log_name,
-			status="Failed",
-			message=str(exc),
-			failed=1,
-			traceback=frappe.get_traceback(with_context=True),
-			complete=True,
-		)
-		raise
 
 
-def _build_create_payload(item, template, settings, service: ProductService) -> dict:
-	status = "published" if settings.get("sync_new_item_as_published") else "draft"
-	if item.disabled or template.disabled:
-		status = "draft"
-
-	payload: dict = {
+# --------------------------------------------------------------------------- #
+# Payload builders
+# --------------------------------------------------------------------------- #
+def _build_create_payload(item, template, settings) -> dict:
+	is_published = settings.sync_new_item_as_published and not (item.disabled or template.disabled)
+	payload = {
 		"title": template.item_name or template.name,
-		"status": status,
+		"status": "published" if is_published else "draft",
 		"description": _plain_description(template.description),
 		"external_id": template.name,
 		"metadata": _product_metadata(template, item),
+		"options": _template_options(template)
+		if item.variant_of
+		else [{"title": DEFAULT_OPTION_TITLE, "values": [DEFAULT_OPTION_VALUE]}],
+		"variants": [_variant_payload(item, settings)],
 	}
-
-	if item.variant_of:
-		payload["options"] = _template_options(template)
-		payload["variants"] = [_variant_payload(item, template, settings=settings)]
-	else:
-		payload["options"] = [{"title": DEFAULT_OPTION_TITLE, "values": [DEFAULT_OPTION_VALUE]}]
-		payload["variants"] = [
-			{
-				"title": DEFAULT_OPTION_VALUE,
-				"sku": item.name,
-				"options": {DEFAULT_OPTION_TITLE: DEFAULT_OPTION_VALUE},
-				"prices": _variant_prices(item, settings=settings),
-				"manage_inventory": _manage_inventory(item, settings),
-				"metadata": _variant_metadata(item),
-				**_optional_barcode(item),
-			}
-		]
-
-	images = _image_payload(template)
-	if images:
-		payload["images"] = images
-		payload["thumbnail"] = images[0]["url"]
-
-	sales_channel_id = _default_sales_channel_id(settings)
+	_apply_images(payload, template)
+	sales_channel_id = settings.default_sales_channel_id or get_store_defaults().get(
+		"default_sales_channel_id"
+	)
 	if sales_channel_id:
 		payload["sales_channels"] = [{"id": sales_channel_id}]
-
-	# Map weight when UOM is known.
 	if flt(template.weight_per_unit):
 		payload["weight"] = flt(template.weight_per_unit)
-
 	return payload
 
 
-def _build_update_product_payload(item_or_template, settings) -> dict:
-	payload: dict = {
-		"title": item_or_template.item_name or item_or_template.name,
-		"description": _plain_description(item_or_template.description),
-		"external_id": item_or_template.name,
-		"metadata": _product_metadata(item_or_template, item_or_template),
+def _build_update_product_payload(template) -> dict:
+	payload = {
+		"title": template.item_name or template.name,
+		"description": _plain_description(template.description),
+		"external_id": template.name,
+		"metadata": _product_metadata(template, template),
 	}
-	if item_or_template.disabled:
+
+	if template.disabled:
 		payload["status"] = "draft"
-	elif settings.get("sync_new_item_as_published"):
-		# Only re-publish when not disabled; do not force published if left draft intentionally.
-		pass
-
-	images = _image_payload(item_or_template)
-	if images:
-		payload["images"] = images
-		payload["thumbnail"] = images[0]["url"]
-
-	sales_channel_id = _default_sales_channel_id(settings)
-	if sales_channel_id:
-		payload["sales_channels"] = [{"id": sales_channel_id}]
-
-	if flt(item_or_template.weight_per_unit):
-		payload["weight"] = flt(item_or_template.weight_per_unit)
-
+	_apply_images(payload, template)
+	if flt(template.weight_per_unit):
+		payload["weight"] = flt(template.weight_per_unit)
 	return payload
 
 
-def _write_create_mappings(item, template, created: dict) -> None:
-	"""Persist Ecommerce Item rows: sellables keyed by Variant ID; template by Product ID."""
-	product_id = created.get("id")
-	if item.variant_of:
-		upsert_mapping(
-			erpnext_item_code=template.name,
-			medusa_product_id=product_id,
-			has_variants=1,
-		)
-		variant_id = _match_variant_id(created, item)
-		if not variant_id:
-			frappe.throw(f"Medusa product {product_id} has no matching variant for Item {item.name}")
-		upsert_mapping(
-			erpnext_item_code=item.name,
-			medusa_product_id=product_id,
-			variant_id=variant_id,
-			sku=item.name,
-			variant_of=template.name,
-			has_variants=0,
-		)
-	else:
-		variants = created.get("variants") or []
-		variant_id = variants[0].get("id") if variants else None
-		if not variant_id:
-			frappe.throw(f"Medusa product {product_id} has no default variant for Item {item.name}")
-		upsert_mapping(
-			erpnext_item_code=item.name,
-			medusa_product_id=product_id,
-			variant_id=variant_id,
-			sku=item.name,
-			has_variants=0,
-		)
-
-
-def _ensure_product_options(service: ProductService, product_id: str, product: dict, template, item) -> None:
-	"""Expand Medusa product options when a new ERPNext attribute value appears."""
-	existing = {opt.get("title"): opt for opt in (product.get("options") or []) if opt.get("title")}
-	desired = _template_options(template)
-	# If options missing entirely, set from template.
-	if not existing and desired:
-		service.update_product(product_id, {"options": desired})
-		return
-
-	# For new values, rebuild options list with union of values (AdminUpdateProductOption).
-	changed = False
-	merged = []
-	for opt in desired:
-		title = opt["title"]
-		values = list(opt.get("values") or [])
-		current = existing.get(title) or {}
-		current_values = []
-		for v in current.get("values") or []:
-			if isinstance(v, dict) and v.get("value"):
-				current_values.append(v["value"])
-			elif isinstance(v, str):
-				current_values.append(v)
-		union = list(dict.fromkeys([*current_values, *values]))
-		if set(union) != set(current_values) or title not in existing:
-			changed = True
-		entry: dict = {"title": title, "values": union}
-		if current.get("id"):
-			entry["id"] = current["id"]
-		merged.append(entry)
-	if changed and merged:
-		service.update_product(product_id, {"options": merged})
-
-
-def _plain_description(description) -> str:
-	if not description:
-		return ""
-	text = str(description)
-	return strip_html(text) if "<" in text else text
-
-
-def _template_options(template) -> list[dict]:
-	"""AdminCreateProductOption: title + values as string[]."""
-	options = []
-	for row in template.attributes or []:
-		attr = frappe.get_doc("Item Attribute", row.attribute)
-		values = [v.attribute_value for v in attr.item_attribute_values or [] if v.attribute_value]
-		if values:
-			options.append({"title": row.attribute, "values": values})
-	if not options:
-		options = [{"title": DEFAULT_OPTION_TITLE, "values": [DEFAULT_OPTION_VALUE]}]
-	return options
-
-
-def _variant_title(item) -> str:
-	"""Short Medusa variant title (avoid pushing polluted ERPNext item_name loops)."""
-	attrs = [row.attribute_value for row in (item.attributes or []) if row.attribute_value]
-	if attrs:
-		return " / ".join(attrs)[:140]
-	name = item.item_name or item.name or "Default variant"
-	# Strip repeated "Product - Product - ..." residue if present.
-	while " - " in name:
-		parts = name.split(" - ", 1)
-		if parts[0] and parts[1].startswith(parts[0]):
-			name = parts[1]
-		else:
-			break
-	return name[:140]
-
-
-def _variant_payload(item, template, *, settings=None) -> dict:
-	"""AdminCreateProductVariant payload."""
+def _variant_payload(item, settings) -> dict:
 	options_map = {
 		row.attribute: row.attribute_value
 		for row in item.attributes or []
 		if row.attribute and row.attribute_value
-	}
-	if not options_map:
-		options_map = {DEFAULT_OPTION_TITLE: DEFAULT_OPTION_VALUE}
+	} or {DEFAULT_OPTION_TITLE: DEFAULT_OPTION_VALUE}
 
 	payload = {
 		"title": _variant_title(item),
 		"sku": item.name,
 		"options": options_map,
-		"prices": _variant_prices(item, settings=settings),
+		"prices": _variant_prices(item, settings),
 		"manage_inventory": _manage_inventory(item, settings),
 		"metadata": _variant_metadata(item),
+		**_optional_barcode(item),
 	}
-	payload.update(_optional_barcode(item))
+	if item.get("gst_hsn_code"):
+		payload["hs_code"] = item.get("gst_hsn_code")
 	if flt(item.weight_per_unit):
 		payload["weight"] = flt(item.weight_per_unit)
 	return payload
 
 
-def _variant_update_payload(item, template, *, settings=None) -> dict:
-	"""AdminUpdateProductVariant payload (no required fields)."""
-	payload = {
-		"title": _variant_title(item),
-		"sku": item.name,
-		"prices": _variant_prices(item, settings=settings),
-		"manage_inventory": _manage_inventory(item, settings),
-		"metadata": _variant_metadata(item),
-	}
-	options_map = {
-		row.attribute: row.attribute_value
-		for row in item.attributes or []
-		if row.attribute and row.attribute_value
-	}
-	if options_map:
-		payload["options"] = options_map
-	payload.update(_optional_barcode(item))
-	if flt(item.weight_per_unit):
-		payload["weight"] = flt(item.weight_per_unit)
-	return payload
+def _apply_images(payload: dict, template) -> None:
+	images = _image_payload(template)
+	if images:
+		payload["images"] = images
+		payload["thumbnail"] = images[0]["url"]
 
 
-def _variant_prices(item, *, settings=None) -> list[dict]:
-	"""Required on create: ``[{currency_code, amount}]`` in major units."""
-	currency = _default_currency(settings)
-	amount = flt(item.get("standard_rate") or 0)
-	# Prefer Item Price from Selling Price List when configured.
-	price_list = (settings or frappe.get_cached_doc(SETTING_DOCTYPE)).get("price_list")
-	if price_list:
+# --------------------------------------------------------------------------- #
+# Small field-level helpers
+# --------------------------------------------------------------------------- #
+def _plain_description(description) -> str:
+	if not description:
+		return ""
+	return strip_html(description) if "<" in str(description) else str(description)
+
+
+def _template_options(template) -> list[dict]:
+	attributes = [row.attribute for row in template.attributes or [] if row.attribute]
+	if not attributes:
+		return [{"title": DEFAULT_OPTION_TITLE, "values": [DEFAULT_OPTION_VALUE]}]
+
+	rows = frappe.get_all(
+		"Item Attribute Value",
+		filters={"parent": ["in", attributes]},
+		fields=["parent", "attribute_value"],
+		order_by="idx",
+	)
+	values_by_attribute: dict[str, list[str]] = {}
+	for row in rows:
+		values_by_attribute.setdefault(row.parent, []).append(row.attribute_value)
+
+	options = [{"title": attr, "values": values} for attr, values in values_by_attribute.items() if values]
+	return options or [{"title": DEFAULT_OPTION_TITLE, "values": [DEFAULT_OPTION_VALUE]}]
+
+
+def _variant_title(item) -> str:
+	attrs = [row.attribute_value for row in (item.attributes or []) if row.attribute_value]
+	if attrs:
+		return " / ".join(attrs)[:140]
+	return (item.item_name or item.name or DEFAULT_OPTION_VALUE)[:140]
+
+
+def _variant_prices(item, settings) -> list[dict]:
+	currency = (settings.default_currency or get_store_defaults().get("default_currency") or "usd").lower()
+	amount = flt(item.standard_rate or 0)
+	if settings.price_list:
 		rate = frappe.db.get_value(
 			"Item Price",
-			{"item_code": item.name, "price_list": price_list, "selling": 1},
+			{"item_code": item.name, "price_list": settings.price_list, "selling": 1},
 			"price_list_rate",
 		)
 		if rate is not None:
@@ -577,18 +352,13 @@ def _variant_prices(item, *, settings=None) -> list[dict]:
 	return [{"currency_code": currency, "amount": amount}]
 
 
-def _manage_inventory(item, settings=None) -> bool:
-	settings = settings or frappe.get_cached_doc(SETTING_DOCTYPE)
-	if not settings.get("update_erpnext_stock_levels_to_medusa"):
-		return False
-	return bool(item.is_stock_item)
+def _manage_inventory(item, settings) -> bool:
+	return bool(settings.update_erpnext_stock_levels_to_medusa and item.is_stock_item)
 
 
 def _optional_barcode(item) -> dict:
-	barcodes = getattr(item, "barcodes", None) or []
-	if barcodes and barcodes[0].get("barcode"):
-		return {"barcode": barcodes[0].barcode}
-	return {}
+	barcodes = item.barcodes or []
+	return {"barcode": barcodes[0].barcode} if barcodes and barcodes[0].barcode else {}
 
 
 def _product_metadata(template, item) -> dict:
@@ -603,74 +373,71 @@ def _product_metadata(template, item) -> dict:
 
 
 def _variant_metadata(item) -> dict:
-	return {
-		"erpnext_item_code": item.name,
-		"source": "erpnext",
-	}
+	return {"erpnext_item_code": item.name, "source": "erpnext"}
 
 
 def _image_payload(item) -> list[dict]:
-	"""Admin image objects require ``url``. Only absolute http(s) URLs are sent."""
-	url = _absolute_image_url(getattr(item, "image", None))
-	if not url:
-		return []
-	return [{"url": url}]
+	url = _absolute_image_url(item.image)
+	return [{"url": url}] if url else []
 
 
 def _absolute_image_url(image: str | None) -> str | None:
 	if not image:
 		return None
 	image = str(image).strip()
-	if image.startswith("http://") or image.startswith("https://"):
+	if image.startswith(("http://", "https://")):
 		return image
 	if image.startswith("/"):
 		return get_url(image)
-	# ERPNext file path without leading slash
-	if image.startswith("files/") or image.startswith("private/files/"):
+	if image.startswith(("files/", "private/files/")):
 		return get_url("/" + image)
 	return None
 
 
-def _default_currency(settings=None) -> str:
-	settings = settings or frappe.get_cached_doc(SETTING_DOCTYPE)
-	currency = (settings.get("default_currency") or "").lower()
-	if currency:
-		return currency
-	defaults = get_store_defaults(refresh_if_empty=True)
-	return (defaults.get("default_currency") or "usd").lower()
+# --------------------------------------------------------------------------- #
+# Mapping persistence
+# --------------------------------------------------------------------------- #
+def upsert_mapping(
+	*,
+	erpnext_item_code: str,
+	medusa_product_id: str,
+	variant_id: str | None = None,
+	sku: str | None = None,
+	variant_of: str | None = None,
+	has_variants: int = 0,
+) -> str:
+	"""Create or update the Ecommerce Item mapping.
 
+	Ecommerce Item is the single source of truth; this function only writes
+	mappings created by the Medusa sync. Only fields that actually exist on
+	the Ecommerce Item doctype (integration, erpnext_item_code,
+	integration_item_code, sku, has_variants, variant_id, variant_of,
+	item_synced_on) are written.
+	"""
+	has_variants = int(has_variants or 0)
+	values = {
+		"erpnext_item_code": erpnext_item_code,
+		"integration_item_code": medusa_product_id,
+		"variant_id": "" if has_variants else (variant_id or ""),
+		"sku": None if has_variants else sku,
+		"variant_of": "" if has_variants else (variant_of or ""),
+		"has_variants": has_variants,
+		"item_synced_on": now(),
+	}
+	filters = {
+		"integration": MODULE_NAME,
+		"integration_item_code": medusa_product_id,
+		"has_variants": has_variants,
+	}
+	# Variant rows are unique by product + variant id; template rows are unique by product alone.
+	if not has_variants:
+		filters["variant_id"] = variant_id or ""
 
-def _default_sales_channel_id(settings=None) -> str | None:
-	settings = settings or frappe.get_cached_doc(SETTING_DOCTYPE)
-	channel = settings.get("default_sales_channel_id")
-	if channel:
-		return channel
-	defaults = get_store_defaults(refresh_if_empty=False)
-	return defaults.get("default_sales_channel_id")
+	name = frappe.db.exists("Ecommerce Item", filters)
+	if name:
+		frappe.db.set_value("Ecommerce Item", name, values, update_modified=False)
+		return name
 
-
-def _match_variant_id(product: dict, item) -> str | None:
-	"""Best-effort match of Medusa variant by option values or SKU."""
-	wanted = {row.attribute: row.attribute_value for row in item.attributes or []}
-	for variant in product.get("variants") or []:
-		if variant.get("sku") == item.name:
-			return variant.get("id")
-		opts = variant.get("options") or []
-		vals = {}
-		if isinstance(opts, dict):
-			vals = opts
-		elif isinstance(opts, list):
-			for v in opts:
-				key = None
-				if isinstance(v.get("option"), dict):
-					key = v.get("option").get("title")
-				elif isinstance(v.get("option"), str):
-					key = v.get("option")
-				elif v.get("title"):
-					key = v.get("title")
-				if key and v.get("value"):
-					vals[key] = v.get("value")
-		if vals and vals == wanted:
-			return variant.get("id")
-	variants = product.get("variants") or []
-	return variants[0].get("id") if variants else None
+	doc = frappe.get_doc({"doctype": "Ecommerce Item", "integration": MODULE_NAME, **values})
+	doc.insert(ignore_permissions=True)
+	return doc.name

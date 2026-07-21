@@ -16,6 +16,7 @@ class ProductSyncPage {
 		this.page = page;
 		this.offset = 0;
 		this.limit = 20;
+		this.allProducts = []; // Local cache for all fetched products
 		this.syncRunning = false;
 		this._filterTimer = null;
 		this.init();
@@ -26,13 +27,12 @@ class ProductSyncPage {
 			() => this.addMarkup(),
 			() => this.bindActions(),
 			() => this.fetchCounts(),
-			() => this.refreshTable(),
+			() => this.loadAllProducts(),
 			() => this.checkSyncStatus(),
 		]);
 	}
 
 	addMarkup() {
-		// Fill the desk viewport (navbar + page head) so the table can grow.
 		this.wrapper.addClass("medusa-sync-page-host");
 		this.wrapper
 			.closest(".layout-main-section-wrapper")
@@ -40,7 +40,6 @@ class ProductSyncPage {
 
 		this.wrapper.append(`
 			<style>
-				/* Viewport-filling shell under desk navbar + page head */
 				.medusa-sync-page-host-wrap {
 					--medusa-sync-page-height: calc(
 						100vh - var(--navbar-height, 48px) - var(--page-head-height, 48px) - 16px
@@ -87,9 +86,7 @@ class ProductSyncPage {
 					height: 100%;
 					margin-bottom: 0 !important;
 				}
-				.medusa-sync-page .medusa-products-card-header {
-					flex: 0 0 auto;
-				}
+				.medusa-sync-page .medusa-products-card-header,
 				.medusa-sync-page .medusa-datatable-footer {
 					flex: 0 0 auto;
 				}
@@ -115,7 +112,6 @@ class ProductSyncPage {
 					margin: 0;
 					line-height: 1.2;
 				}
-				/* Table area expands; body scrolls inside remaining height */
 				.medusa-sync-page #medusa-product-list {
 					width: 100%;
 					max-width: 100%;
@@ -141,7 +137,6 @@ class ProductSyncPage {
 					flex: 1 1 auto;
 					overflow-x: auto !important;
 					overflow-y: auto !important;
-					/* Override DataTable default 40vw / max-height caps */
 					height: 100% !important;
 					max-height: none !important;
 					min-height: 160px;
@@ -206,7 +201,8 @@ class ProductSyncPage {
 						<div id="medusa-product-list"><div class="text-center text-muted py-4">${__(
 							"Loading…"
 						)}</div></div>
-						<div class="medusa-datatable-footer mt-2 pt-3 pb-2 border-top text-right" style="display:none">
+						<div class="medusa-datatable-footer mt-2 pt-3 pb-2 border-top d-flex justify-content-between align-items-center" style="display:none">
+							<span class="text-muted small page-info"></span>
 							<div class="btn-group">
 								<button type="button" class="btn btn-sm btn-default btn-paginate btn-prev">${__("Prev")}</button>
 								<button type="button" class="btn btn-sm btn-default btn-paginate btn-next">${__("Next")}</button>
@@ -249,7 +245,6 @@ class ProductSyncPage {
 			</div>
 		`);
 
-		// Keep sync-log card hidden until a bulk sync starts (class toggled in logSync).
 		this.wrapper.find("#sync-log-card").hide();
 
 		if (!this._boundResize) {
@@ -258,26 +253,21 @@ class ProductSyncPage {
 		}
 	}
 
-	/**
-	 * Size DataTable body to the remaining height inside the products card
-	 * (header + pagination stay fixed; body scrolls).
-	 */
 	fitTableHeight() {
 		const $list = this.wrapper.find("#medusa-product-list");
 		const $scrollable = $list.find(".dt-scrollable");
-		if (!$list.length || !$scrollable.length) {
-			return;
-		}
+		if (!$list.length || !$scrollable.length) return;
+
 		const listEl = $list[0];
 		const headerEl = $list.find(".dt-header")[0];
 		const headerH = headerEl ? headerEl.offsetHeight : 0;
-		// Prefer measured free space in the flex host; fall back to viewport math.
 		let available = listEl.clientHeight - headerH;
+
 		if (available < 160) {
 			const card = this.wrapper.find(".medusa-products-card")[0];
 			const cardHeader = this.wrapper.find(".medusa-products-card-header")[0];
 			const footer = this.wrapper.find(".medusa-datatable-footer")[0];
-			const cardPad = 24; // p-3 top+bottom approx
+			const cardPad = 24;
 			const used =
 				(cardHeader ? cardHeader.offsetHeight : 0) +
 				(footer && footer.offsetParent ? footer.offsetHeight : 0) +
@@ -287,9 +277,8 @@ class ProductSyncPage {
 			const hostTop = card ? card.getBoundingClientRect().top : 80;
 			available = Math.max(160, window.innerHeight - hostTop - used);
 		}
+
 		const el = $scrollable[0];
-		// !important so DataTable's setBodyStyle cannot collapse the body
-		// when there are fewer rows than the available viewport.
 		el.style.setProperty("height", `${available}px`, "important");
 		el.style.setProperty("max-height", `${available}px`, "important");
 		el.style.setProperty("overflow-y", "auto", "important");
@@ -297,38 +286,42 @@ class ProductSyncPage {
 	}
 
 	bindActions() {
-		// Live search: debounce typing so filter applies automatically.
+		// Typing filter triggers re-fetching server data once timer stops
 		this.wrapper.on("input", "#medusa-product-q", () => {
 			clearTimeout(this._filterTimer);
 			this._filterTimer = setTimeout(() => {
 				this.offset = 0;
-				this.refreshTable();
+				this.loadAllProducts();
 			}, 350);
 		});
-		// Enter still applies immediately.
+
 		this.wrapper.on("keydown", "#medusa-product-q", (e) => {
 			if (e.key === "Enter") {
 				e.preventDefault();
 				clearTimeout(this._filterTimer);
 				this.offset = 0;
-				this.refreshTable();
+				this.loadAllProducts();
 			}
 		});
-		// Status changes apply filter immediately.
+
 		this.wrapper.on("change", "#medusa-product-status", () => {
 			this.offset = 0;
-			this.refreshTable();
+			this.loadAllProducts();
 		});
+
+		// Local Pagination: No network request
 		this.wrapper.on("click", ".btn-prev", () => {
-			if (this.prevOffset == null) return;
-			this.offset = this.prevOffset;
-			this.refreshTable();
+			if (this.offset <= 0) return;
+			this.offset = Math.max(0, this.offset - this.limit);
+			this.renderTable();
 		});
+
 		this.wrapper.on("click", ".btn-next", () => {
-			if (this.nextOffset == null) return;
-			this.offset = this.nextOffset;
-			this.refreshTable();
+			if (this.offset + this.limit >= this.allProducts.length) return;
+			this.offset += this.limit;
+			this.renderTable();
 		});
+
 		this.wrapper.on("click", ".btn-sync-one", (e) => this.syncOne($(e.currentTarget)));
 		this.wrapper.on("click", ".btn-resync-one", (e) => this.syncOne($(e.currentTarget), true));
 		this.wrapper.on("click", "#btn-sync-all", () => this.startBulk());
@@ -343,11 +336,14 @@ class ProductSyncPage {
 			this.wrapper.find("#count-erpnext").text(message.erpnextCount ?? "-");
 			this.wrapper.find("#count-synced").text(message.syncedCount ?? "-");
 		} catch (e) {
-			/* ignore — counts optional when Medusa is unreachable */
+			/* ignore when Medusa is unreachable */
 		}
 	}
 
-	async refreshTable() {
+	/**
+	 * Single API Call: Fetch all products matching current query/status parameters
+	 */
+	async loadAllProducts() {
 		const list = this.wrapper.find("#medusa-product-list");
 		list.html(`<div class="text-center text-muted py-4">${__("Loading…")}</div>`);
 		try {
@@ -355,104 +351,12 @@ class ProductSyncPage {
 			const status = this.wrapper.find("#medusa-product-status").val();
 			const { message } = await frappe.call({
 				method: "medusa_connector.medusa_connector.page.medusa_sync_products.medusa_sync_products.get_products",
-				args: { offset: this.offset, limit: this.limit, q, status },
+				args: { fetch_all: 1, q, status },
 			});
-			this.nextOffset = message.nextOffset;
-			this.prevOffset = message.prevOffset;
-			// Continuous S.No across pages: page 2 starts at offset+1 (e.g. 21, 22…).
-			const base = cint(this.offset) || 0;
-			const products = message.products || [];
-			const rows = products.map((p, idx) => ({
-				[__("S.No")]: base + idx + 1,
-				[__("Medusa Product ID")]: p.id,
-				[__("Product Name")]: frappe.utils.escape_html(p.title || ""),
-				[__("SKU")]: frappe.utils.escape_html(p.sku || ""),
-				[__("Medusa Status")]: this.statusPill(p.status),
-				[__("ERPNext Sync Status")]: p.synced
-					? `<span class="indicator-pill green">${__("Synced")}</span>`
-					: `<span class="indicator-pill orange">${__("Not Synced")}</span>`,
-				[__("Actions")]: p.synced
-					? `<div class="medusa-action-cell"><button type="button" class="btn btn-default btn-xs btn-resync-one" data-id="${
-							p.id
-					  }">${__("Re-sync")}</button></div>`
-					: `<div class="medusa-action-cell"><button type="button" class="btn btn-default btn-xs btn-sync-one" data-id="${
-							p.id
-					  }">${__("Sync")}</button></div>`,
-			}));
-			// Explicit widths + layout "fixed" so columns stay readable and the
-			// table scrolls horizontally when total width exceeds the card.
-			const columns = [
-				{
-					name: __("S.No"),
-					editable: false,
-					focusable: false,
-					align: "center",
-					width: 70,
-				},
-				{
-					name: __("Medusa Product ID"),
-					editable: false,
-					focusable: false,
-					width: 300,
-				},
-				{
-					name: __("Product Name"),
-					editable: false,
-					focusable: false,
-					width: 180,
-				},
-				{
-					name: __("SKU"),
-					editable: false,
-					focusable: false,
-					width: 220,
-				},
-				{
-					name: __("Medusa Status"),
-					editable: false,
-					focusable: false,
-					align: "center",
-					width: 140,
-				},
-				{
-					name: __("ERPNext Sync Status"),
-					editable: false,
-					focusable: false,
-					align: "center",
-					width: 160,
-				},
-				{
-					name: __("Actions"),
-					editable: false,
-					focusable: false,
-					align: "center",
-					width: 120,
-				},
-			];
-			list.empty();
-			if (this.table && typeof this.table.destroy === "function") {
-				try {
-					this.table.destroy();
-				} catch (e) {
-					/* ignore stale instance */
-				}
-				this.table = null;
-			}
-			this.table = new frappe.DataTable(list[0], {
-				columns,
-				data: rows,
-				layout: "fixed",
-				serialNoColumn: false,
-				checkboxColumn: false,
-				inlineFilters: false,
-				noDataMessage: __("No products found"),
-			});
-			this.wrapper.find(".medusa-datatable-footer").show();
-			this.wrapper.find(".btn-prev").prop("disabled", this.prevOffset == null);
-			this.wrapper.find(".btn-next").prop("disabled", this.nextOffset == null);
-			// After DataTable paints, expand body into remaining viewport height.
-			requestAnimationFrame(() => this.fitTableHeight());
-			setTimeout(() => this.fitTableHeight(), 50);
+
+			this.allProducts = message.products || [];
+			this.offset = 0;
+			this.renderTable();
 		} catch (e) {
 			list.html(
 				`<div class="text-danger py-3">${__(
@@ -460,6 +364,100 @@ class ProductSyncPage {
 				)}</div>`
 			);
 		}
+	}
+
+	/**
+	 * Local Rendering: Slices cached `allProducts` array for current page
+	 */
+	renderTable() {
+		const list = this.wrapper.find("#medusa-product-list");
+		const total = this.allProducts.length;
+
+		if (total === 0) {
+			list.html(`<div class="text-center text-muted py-4">${__("No products found")}</div>`);
+			this.wrapper.find(".medusa-datatable-footer").hide();
+			return;
+		}
+
+		const pageSlice = this.allProducts.slice(this.offset, this.offset + this.limit);
+
+		const rows = pageSlice.map((p, idx) => ({
+			[__("S.No")]: this.offset + idx + 1,
+			[__("Medusa Product ID")]: p.id,
+			[__("Product Name")]: frappe.utils.escape_html(p.title || ""),
+			[__("SKU")]: frappe.utils.escape_html(p.sku || ""),
+			[__("Medusa Status")]: this.statusPill(p.status),
+			[__("ERPNext Sync Status")]: p.synced
+				? `<span class="indicator-pill green">${__("Synced")}</span>`
+				: `<span class="indicator-pill orange">${__("Not Synced")}</span>`,
+			[__("Actions")]: p.synced
+				? `<div class="medusa-action-cell"><button type="button" class="btn btn-default btn-xs btn-resync-one" data-id="${
+						p.id
+				  }">${__("Re-sync")}</button></div>`
+				: `<div class="medusa-action-cell"><button type="button" class="btn btn-default btn-xs btn-sync-one" data-id="${
+						p.id
+				  }">${__("Sync")}</button></div>`,
+		}));
+
+		const columns = [
+			{ name: __("S.No"), editable: false, focusable: false, align: "center", width: 70 },
+			{ name: __("Medusa Product ID"), editable: false, focusable: false, width: 300 },
+			{ name: __("Product Name"), editable: false, focusable: false, width: 180 },
+			{ name: __("SKU"), editable: false, focusable: false, width: 220 },
+			{
+				name: __("Medusa Status"),
+				editable: false,
+				focusable: false,
+				align: "center",
+				width: 140,
+			},
+			{
+				name: __("ERPNext Sync Status"),
+				editable: false,
+				focusable: false,
+				align: "center",
+				width: 160,
+			},
+			{
+				name: __("Actions"),
+				editable: false,
+				focusable: false,
+				align: "center",
+				width: 120,
+			},
+		];
+
+		list.empty();
+		if (this.table && typeof this.table.destroy === "function") {
+			try {
+				this.table.destroy();
+			} catch (e) {
+				/* ignore stale instance */
+			}
+			this.table = null;
+		}
+
+		this.table = new frappe.DataTable(list[0], {
+			columns,
+			data: rows,
+			layout: "fixed",
+			serialNoColumn: false,
+			checkboxColumn: false,
+			inlineFilters: false,
+			noDataMessage: __("No products found"),
+		});
+
+		// Update Pagination UI
+		const startIdx = this.offset + 1;
+		const endIdx = Math.min(this.offset + this.limit, total);
+		this.wrapper.find(".page-info").text(`${startIdx}-${endIdx} ${__("of")} ${total}`);
+
+		this.wrapper.find(".medusa-datatable-footer").show();
+		this.wrapper.find(".btn-prev").prop("disabled", this.offset === 0);
+		this.wrapper.find(".btn-next").prop("disabled", this.offset + this.limit >= total);
+
+		requestAnimationFrame(() => this.fitTableHeight());
+		setTimeout(() => this.fitTableHeight(), 50);
 	}
 
 	statusPill(status) {
@@ -484,7 +482,7 @@ class ProductSyncPage {
 					indicator: "green",
 				});
 				this.fetchCounts();
-				this.refreshTable();
+				this.loadAllProducts();
 			} else {
 				frappe.msgprint(message?.error || __("Sync failed"));
 			}
@@ -554,7 +552,7 @@ class ProductSyncPage {
 				this.toggleBulkButtons(false);
 				this.syncRunning = false;
 				this.fetchCounts();
-				this.refreshTable();
+				this.loadAllProducts();
 			}
 		});
 	}

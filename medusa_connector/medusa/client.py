@@ -22,11 +22,6 @@ REST_HEALTH_PATH = "/admin/regions"
 WEBHOOKS_PATH = "/admin/webhooks"
 
 
-def get_settings():
-	"""Return the cached Medusa Settings single doc."""
-	return frappe.get_cached_doc("Medusa Settings")
-
-
 class MedusaClient:
 	"""Thin authenticated client that talks to Medusa in REST mode.
 
@@ -35,7 +30,7 @@ class MedusaClient:
 	"""
 
 	def __init__(self, settings=None) -> None:
-		self.settings = settings or get_settings()
+		self.settings = settings or frappe.get_cached_doc("Medusa Settings")
 		if not self.settings.enabled:
 			raise MedusaConnectionError("Medusa Connector is disabled")
 
@@ -221,4 +216,11 @@ def scheduled_health_check() -> None:
 	"""Hourly scheduler: refresh connection status when the connector is enabled."""
 	if not frappe.db.get_single_value("Medusa Settings", "enabled"):
 		return
-	test_connection()
+
+	try:
+		test_connection()
+	except Exception:
+		frappe.log_error(
+			title="Medusa scheduled health check failed",
+			message=frappe.get_traceback(with_context=True),
+		)

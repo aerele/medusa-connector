@@ -146,7 +146,6 @@ doc_events = {
 	"Item": {
 		"after_insert": "medusa_connector.product.export_products.upload_erpnext_item",
 		"on_update": "medusa_connector.product.export_products.upload_erpnext_item",
-		"on_trash": "medusa_connector.product.export_products.archive_erpnext_item",
 	},
 }
 
