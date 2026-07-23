@@ -208,7 +208,11 @@ function load_naming_series(frm) {
 			const set_opts = (field, key) => {
 				const opts = r.message[key];
 				if (opts) {
-					frm.set_df_property(field, "options", opts);
+					frm.set_df_property(
+						field,
+						"options",
+						opts.split("\n").filter(Boolean).join("\n")
+					);
 				}
 			};
 			set_opts("sales_order_series", "sales_order_series");

@@ -325,9 +325,9 @@ class InventoryService:
 		4. SKU
 
 		Example:
-			Variant title: ``Default variant``
-			Product title: ``Blue T-Shirt``
-			Result:         ``Default variant (Blue T-Shirt)``
+		    Variant title: ``Default variant``
+		    Product title: ``Blue T-Shirt``
+		    Result:         ``Default variant (Blue T-Shirt)``
 		"""
 		payload = {}
 		variant_title = (variant.get("title") or "").strip()

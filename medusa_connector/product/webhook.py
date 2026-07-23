@@ -36,27 +36,29 @@ def _fetch_map_and_sync(
 	return result, mapped
 
 
-def _sync_message(
+def _sync_result(
 	event_name: str,
 	result: dict,
 	mapped: dict,
 	product_id: str | None = None,
-) -> str:
+) -> dict:
 	message = (
 		f"{event_name}: {result['action']} {result['item_code']} "
-		f"(status={mapped.get('raw_status')} "
-		f"disabled={mapped.get('disabled')})"
+		f"(status={mapped.get('raw_status')} disabled={mapped.get('disabled')})"
 	)
 
 	if product_id:
 		message = (
 			f"{event_name}: {result['action']} {result['item_code']} "
-			f"(via product {product_id}; "
-			f"status={mapped.get('raw_status')} "
+			f"(via product {product_id}; status={mapped.get('raw_status')} "
 			f"disabled={mapped.get('disabled')})"
 		)
 
-	return message
+	return {
+		"status": "success",
+		"item_code": result["item_code"],
+		"message": message,
+	}
 
 
 class ProductBaseHandler(BaseHandler):
@@ -90,8 +92,7 @@ class ProductBaseHandler(BaseHandler):
 			self.sync_service,
 			product=product,
 		)
-
-		return _sync_message(
+		return _sync_result(
 			event_name,
 			result,
 			mapped,

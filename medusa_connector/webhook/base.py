@@ -69,7 +69,7 @@ class BaseHandler(abc.ABC):
 			frappe.logger("medusa_connector").warning(
 				f"Could not hydrate {self.resource}/{event.entity_id}: {exc}"
 			)
-			return event.data
+			raise
 		if isinstance(resp, dict):
 			# Medusa wraps single resources, e.g. {"order": {...}}.
 			return resp.get(self.resource.rstrip("s"), resp)

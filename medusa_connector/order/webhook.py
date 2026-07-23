@@ -1,269 +1,255 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
-
-"""Order-domain webhook handlers → ERPNext Sales Order sync."""
+"""Order-domain webhook handlers -> ERPNext Sales Order sync."""
 
 from __future__ import annotations
 
 import frappe
 from frappe.utils import cstr
 
+from medusa_connector.constants import FULFILLMENT_ID_FIELD, ORDER_ID_FIELD, SETTING_DOCTYPE
+from medusa_connector.medusa.exceptions import MedusaConnectorError
 from medusa_connector.medusa.order import OrderService
-from medusa_connector.order.sync import cancel_order, get_sales_order, sync_sales_order
+from medusa_connector.medusa.payment import PaymentService
+from medusa_connector.order._shared import result
+from medusa_connector.order.fulfillment import FulfillmentSync
+from medusa_connector.order.invoice import InvoiceSync
+from medusa_connector.order.payment_sync import PaymentSync
+from medusa_connector.order.refund import RefundSync
+from medusa_connector.order.sync import OrderSync
 from medusa_connector.webhook.base import BaseHandler, MedusaEvent
 from medusa_connector.webhook.registry import register
 
 
-def _full_order(entity: dict, event: MedusaEvent) -> dict:
-	"""Prefer hydrated Admin order; re-fetch when payload is thin."""
-	order = entity if isinstance(entity, dict) else {}
-	order_id = cstr(order.get("id") or event.entity_id or "")
+class OrderBaseHandler(BaseHandler):
+	"""Common functionality for handlers operating on Medusa orders."""
 
-	# Thin webhook body often only has id — always re-fetch for SO create.
-	if order_id and (not order.get("items") or not order.get("customer_id")):
-		fetched = OrderService().get_order(order_id)
-		if fetched:
-			return fetched
-	return order
+	resource = "orders"
+
+	def get_order(self, event: MedusaEvent, entity: dict) -> dict:
+		order = entity if isinstance(entity, dict) else {}
+		order_id = self.get_order_id(event, order)
+		if order_id and (not order.get("items") or not self._has_customer_ref(order)):
+			order = OrderService().get_order(order_id) or order
+		return order
+
+	@staticmethod
+	def _has_customer_ref(order: dict) -> bool:
+		return bool(order.get("customer_id") or (order.get("customer") or {}).get("id"))
+
+	def get_order_id(self, event: MedusaEvent, order: dict) -> str:
+		return cstr(order.get("id") or event.entity_id or "")
+
+	def get_display_id(self, event: MedusaEvent, order: dict) -> str:
+		return cstr(order.get("display_id") or order.get("id") or event.entity_id or "")
+
+	def get_order_sync(self) -> OrderSync:
+		return OrderSync()
+
+	def get_existing_sales_order(self, event: MedusaEvent, order: dict, sync: OrderSync | None = None):
+		order_id = self.get_order_id(event, order)
+		if not order_id:
+			return None
+		sync = sync or self.get_order_sync()
+		return sync.get_sales_order(order_id)
+
+	def sync_order(self, event: MedusaEvent, order: dict, sync: OrderSync | None = None) -> str | None:
+		sync = sync or self.get_order_sync()
+		return sync.sync(order, request_id=event.log_name)
+
+	def cancel_order(self, event: MedusaEvent, order: dict, sync: OrderSync | None = None) -> str | None:
+		sync = sync or self.get_order_sync()
+		return sync.cancel(order, request_id=event.log_name)
+
+	def format_order_sync_result(self, event: MedusaEvent, order: dict, so_name: str | None) -> dict:
+		"""Turn a Sales Order name (or None) into a proper result dict — this
+		is what used to be a plain formatted string, silently hiding failure."""
+		display_id = self.get_display_id(event, order)
+		if so_name:
+			return result(
+				"success",
+				sales_order=so_name,
+				message=f"{event.name}: Sales Order {so_name} for order #{display_id}",
+			)
+		return result(
+			"invalid",
+			message=f"{event.name}: order #{display_id} not created (see Ecommerce Integration Log)",
+		)
 
 
 @register("order.placed")
-class OrderPlacedHandler(BaseHandler):
-	"""Create Sales Order (customer + items + taxes) on new Medusa order."""
-
-	resource = "orders"
-
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		order = _full_order(entity, event)
-		order_id = cstr(order.get("id") or event.entity_id or "")
-		so_name = sync_sales_order(order, request_id=event.log_name)
-		display = order.get("display_id") or order_id
-		if so_name:
-			return f"{event.name}: Sales Order {so_name} for order #{display}"
-		return f"{event.name}: order #{display} not created (see Ecommerce Integration Log)"
+class OrderPlacedHandler(OrderBaseHandler):
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
+		order = self.get_order(event, entity)
+		so_name = self.sync_order(event, order)
+		return self.format_order_sync_result(event, order, so_name)
 
 
 @register("order.updated", "order.completed")
-class OrderUpdatedHandler(BaseHandler):
-	"""Create SO if missing; otherwise refresh status custom fields."""
-
-	resource = "orders"
-
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		order = _full_order(entity, event)
-		order_id = cstr(order.get("id") or event.entity_id or "")
-		existing = get_sales_order(order_id) if order_id else None
+class OrderUpdatedHandler(OrderBaseHandler):
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
+		order = self.get_order(event, entity)
+		sync = self.get_order_sync()
+		existing = self.get_existing_sales_order(event, order, sync)
 		if existing:
-			from medusa_connector.order.sync import update_order_status_fields
-
-			update_order_status_fields(order)
-			return f"{event.name}: updated status on {existing.name}"
-		so_name = sync_sales_order(order, request_id=event.log_name)
-		display = order.get("display_id") or order_id
-		if so_name:
-			return f"{event.name}: Sales Order {so_name} for order #{display}"
-		return f"{event.name}: order #{display} — no SO created"
+			sync.update_status_fields(order)
+			return result(
+				"success",
+				sales_order=existing.name,
+				message=f"{event.name}: updated status on {existing.name}",
+			)
+		so_name = self.sync_order(event, order, sync)
+		return self.format_order_sync_result(event, order, so_name)
 
 
 @register("order.canceled")
-class OrderCanceledHandler(BaseHandler):
-	"""Cancel ERPNext Sales Order when Medusa cancels (if safe)."""
-
-	resource = "orders"
-
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		order = _full_order(entity, event)
-		so_name = cancel_order(order, request_id=event.log_name)
-		display = order.get("display_id") or order.get("id") or event.entity_id
+class OrderCanceledHandler(OrderBaseHandler):
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
+		order = self.get_order(event, entity)
+		so_name = self.cancel_order(event, order)
+		display_id = self.get_display_id(event, order)
 		if so_name:
-			return f"{event.name}: handled Sales Order {so_name} for order #{display}"
-		return f"{event.name}: no Sales Order for order #{display}"
+			return result(
+				"success",
+				sales_order=so_name,
+				message=f"{event.name}: handled Sales Order {so_name} for order #{display_id}",
+			)
+		return result("invalid", message=f"{event.name}: no Sales Order for order #{display_id}")
 
 
-@register(
-	"order.fulfillment_created",
-	"order.fulfillment_canceled",
-	# Aliases used in older docs / webhook plugin configs
-	"fulfillment.canceled",
-)
+@register("order.fulfillment_created", "order.fulfillment_canceled", "fulfillment.canceled")
 class FulfillmentHandler(BaseHandler):
-	"""Medusa fulfillment → Delivery Note (create / cancel).
-
-	Payload (Medusa v2)::
-
-	    {"order_id": "order_…", "fulfillment_id": "fu_…"}
-
-	Does not use ``resource="orders"`` because ``entity_id`` is not the order id
-	(``id`` is absent; ids are ``order_id`` / ``fulfillment_id``).
-	"""
+	"""Medusa v2 fulfillment payloads contain ``order_id`` and
+	``fulfillment_id``; the event ``entity_id`` refers to the fulfillment."""
 
 	resource = None
 
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		from medusa_connector.order.fulfillment import (
-			cancel_fulfillment_delivery_note,
-			sync_fulfillment,
-		)
-
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
 		entity = entity if isinstance(entity, dict) else {}
 		order_id = cstr(entity.get("order_id") or "")
 		fulfillment_id = cstr(entity.get("fulfillment_id") or entity.get("id") or event.entity_id or "")
-
 		is_cancel = event.name in {"order.fulfillment_canceled", "fulfillment.canceled"}
+		sync = FulfillmentSync()
 		if is_cancel:
-			result = cancel_fulfillment_delivery_note(
-				fulfillment_id=fulfillment_id,
-				order_id=order_id or None,
-				request_id=event.log_name,
+			res = sync.cancel(
+				fulfillment_id=fulfillment_id, order_id=order_id or None, request_id=event.log_name
 			)
 		else:
-			result = sync_fulfillment(
-				order_id=order_id or None,
-				fulfillment_id=fulfillment_id or None,
-				request_id=event.log_name,
+			res = sync.sync(
+				order_id=order_id or None, fulfillment_id=fulfillment_id or None, request_id=event.log_name
 			)
-
-		dn = result.get("delivery_note") or "-"
-		so = result.get("sales_order") or "-"
-		return (
-			f"{event.name}: {result.get('status')} DN={dn} SO={so} "
-			f"fulfillment={fulfillment_id or '-'} order={order_id or result.get('order_id') or '-'} "
-			f"— {result.get('message') or ''}"
+		# res is FulfillmentSync's real result() dict — status is preserved,
+		# only the message is reformatted. This is the exact fix for a
+		# connection error showing "Success": res["status"] is now "error"
+		# and that survives into the log instead of being discarded.
+		message = (
+			f"{event.name}: {res.get('status')} DN={res.get('delivery_note') or '-'} "
+			f"fulfillment={fulfillment_id or '-'} order={order_id or res.get('order_id') or '-'} "
+			f"— {res.get('message') or ''}"
 		).strip()
+		return {**res, "message": message}
 
 
-@register(
-	"shipment.created",
-	"delivery.created",
-	# Alias from older connector docs
-	"order.shipment_created",
-)
+@register("shipment.created", "delivery.created", "order.shipment_created")
 class ShipmentHandler(BaseHandler):
-	"""Shipment / delivery milestones on a fulfillment → ensure DN + tracking.
-
-	Medusa v2 payloads::
-
-	    shipment.created  → { "id": "<fulfillment_id>", ... }
-	    delivery.created  → { "id": "<fulfillment_id>" }
-
-	If the DN was already created on ``order.fulfillment_created``, this updates
-	tracking/status. If not, it creates the DN when ``order_id`` can be resolved.
-	"""
-
 	resource = None
 
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		from medusa_connector.order.fulfillment import update_fulfillment_tracking
-
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
 		entity = entity if isinstance(entity, dict) else {}
 		fulfillment_id = cstr(entity.get("id") or entity.get("fulfillment_id") or event.entity_id or "")
 		order_id = cstr(entity.get("order_id") or "")
-
-		# If only fulfillment id is present, try locating an existing DN's order id.
 		if fulfillment_id and not order_id:
-			from medusa_connector.constants import FULFILLMENT_ID_FIELD, ORDER_ID_FIELD
-
 			order_id = cstr(
 				frappe.db.get_value("Delivery Note", {FULFILLMENT_ID_FIELD: fulfillment_id}, ORDER_ID_FIELD)
 				or ""
 			)
-
 		if not fulfillment_id:
-			return f"{event.name}: missing fulfillment id on payload"
-
+			return result("invalid", message=f"{event.name}: missing fulfillment id on payload")
 		if not order_id:
-			# Cannot load order/fulfillment without order_id (no GET /admin/fulfillments/:id).
-			return (
-				f"{event.name}: fulfillment {fulfillment_id} — no order_id and no existing DN; "
-				"wait for order.fulfillment_created or include order_id"
+			return result(
+				"skipped",
+				message=(
+					f"{event.name}: fulfillment {fulfillment_id} — no order_id and no existing DN; "
+					"wait for order.fulfillment_created or include order_id"
+				),
 			)
-
-		result = update_fulfillment_tracking(
-			fulfillment_id=fulfillment_id,
-			order_id=order_id,
-			request_id=event.log_name,
+		res = FulfillmentSync().sync(
+			order_id=order_id, fulfillment_id=fulfillment_id, request_id=event.log_name
 		)
-		return (
-			f"{event.name}: {result.get('status')} DN={result.get('delivery_note') or '-'} "
-			f"fulfillment={fulfillment_id} order={order_id} — {result.get('message') or ''}"
+		message = (
+			f"{event.name}: {res.get('status')} DN={res.get('delivery_note') or '-'} "
+			f"fulfillment={fulfillment_id} order={order_id} — {res.get('message') or ''}"
 		).strip()
+		return {**res, "message": message}
 
 
 @register("payment.captured", "payment.refunded")
 class PaymentHandler(BaseHandler):
-	"""On capture: resolve order from payment → ensure SO → optional SI + PE.
+	resource = None
 
-	Medusa v2 ``payment.*`` webhooks only include ``{"id": "pay_..."}``. The
-	linked order is loaded via Admin ``GET /admin/payments/{id}`` expanding
-	``payment_collection.order`` (see :class:`PaymentService`).
-	"""
-
-	resource = None  # not an /admin/orders/{id} resource; resolve via PaymentService
-
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		import frappe
-
-		from medusa_connector.constants import SETTING_DOCTYPE
-		from medusa_connector.medusa.exceptions import MedusaConnectorError
-		from medusa_connector.medusa.payment import PaymentService
-		from medusa_connector.order.invoice import create_sales_invoice
-
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
 		entity = entity if isinstance(entity, dict) else {}
 		payment_id = cstr(entity.get("id") or event.entity_id or "")
-
 		if event.name == "payment.refunded":
-			from medusa_connector.order.refund import process_refund
+			return self._handle_refund(event, payment_id)
+		return self._handle_payment_capture(event, entity, payment_id)
 
-			result = process_refund(
-				payment_id=payment_id or None,
-				request_id=event.log_name,
-			)
-			return (
-				f"{event.name}: {result.get('status')} refund={result.get('refund_id') or '-'} "
-				f"payment={payment_id} order={result.get('order_id') or '-'} "
-				f"SI={result.get('sales_invoice') or '-'} PE={result.get('payment_entry') or '-'} "
-				f"— {result.get('message') or ''}"
-			).strip()
+	def _handle_refund(self, event: MedusaEvent, payment_id: str) -> dict:
+		res = RefundSync().process(payment_id=payment_id, request_id=event.log_name)
+		message = (
+			f"{event.name}: {res.get('status')} refund={res.get('refund_id') or '-'} "
+			f"payment={payment_id} order={res.get('order_id') or '-'} "
+			f"SI={res.get('sales_invoice') or '-'} PE={res.get('payment_entry') or '-'} "
+			f"— {res.get('message') or ''}"
+		).strip()
+		return {**res, "message": message}
 
+	def _handle_payment_capture(self, event: MedusaEvent, entity: dict, payment_id: str) -> dict:
 		try:
-			payment_service = PaymentService()
-			order_id = payment_service.resolve_order_id(entity, payment_id=payment_id)
+			order_id = PaymentService().resolve_order_id(entity, payment_id=payment_id)
 		except MedusaConnectorError as exc:
-			frappe.logger("medusa_connector").warning(
-				f"{event.name}: failed to resolve order for payment {payment_id}: {exc}"
+			return result(
+				"error", message=f"{event.name}: could not resolve order for payment {payment_id} ({exc})"
 			)
-			return f"{event.name}: could not resolve order for payment {payment_id} ({exc})"
-
 		if not order_id:
-			return (
-				f"{event.name}: no order linked to payment {payment_id or '(unknown)'} "
-				"(checked payload and Admin payment_collection.order)"
+			return result(
+				"invalid", message=f"{event.name}: no order linked to payment {payment_id or '(unknown)'}"
 			)
-
 		order = OrderService().get_order(order_id)
 		if not order:
-			return f"{event.name}: could not load order {order_id} for payment {payment_id}"
-
-		so_name = sync_sales_order(order, request_id=event.log_name)
-		if event.name == "payment.captured" and so_name:
-			settings = frappe.get_doc(SETTING_DOCTYPE)
-			so = frappe.get_doc("Sales Order", so_name)
-			si_name = create_sales_invoice(order, settings, so, payment_id=payment_id or None)
-			if si_name:
-				return (
-					f"{event.name}: Sales Invoice {si_name} for {so_name} "
-					f"(payment {payment_id}, order {order_id})"
-				)
-			return (
-				f"{event.name}: SO {so_name} (invoice skipped or already billed; "
-				f"payment {payment_id}, order {order_id})"
+			return result(
+				"error", message=f"{event.name}: could not load order {order_id} for payment {payment_id}"
 			)
-		return f"{event.name}: payment {payment_id} order {order_id}"
+		settings = frappe.get_doc(SETTING_DOCTYPE)
+		sync = OrderSync(settings)
+		so_name = sync.sync(order, request_id=event.log_name)
+		if not so_name:
+			return result(
+				"invalid", message=f"{event.name}: payment {payment_id} order {order_id} — SO not created"
+			)
+		so = frappe.get_doc("Sales Order", so_name)
+		si_name = InvoiceSync(settings).create(order, so)
+		if not si_name:
+			return result(
+				"skipped",
+				sales_order=so_name,
+				message=f"{event.name}: SO {so_name} (invoice skipped or already billed; payment {payment_id}, order {order_id})",
+			)
+		si = frappe.get_doc("Sales Invoice", si_name)
+		PaymentSync(settings).reconcile(
+			si, InvoiceSync.get_posting_date(order), payment_id=payment_id or None, order_id=order_id
+		)
+		return result(
+			"success",
+			sales_order=so_name,
+			sales_invoice=si_name,
+			message=f"{event.name}: Sales Invoice {si_name} for {so_name} (payment {payment_id}, order {order_id})",
+		)
 
 
 @register("order.return_requested", "order.return_received")
 class ReturnHandler(BaseHandler):
-	"""Return events (pending)."""
+	resource = "orders"
 
-	def process(self, event: MedusaEvent, entity: dict) -> str | None:
-		return f"{event.name}: return {event.entity_id} (sync pending)"
+	def process(self, event: MedusaEvent, entity: dict) -> dict:
+		return result("skipped", message=f"{event.name}: return {event.entity_id} (sync pending)")

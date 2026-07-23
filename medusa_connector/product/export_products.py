@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
@@ -74,11 +73,8 @@ def _get_mapping(item_code: str) -> dict | None:
 	)
 
 
-# --------------------------------------------------------------------------- #
-# Sync-log helper (shared by create / add-variant / update flows)
-# --------------------------------------------------------------------------- #
 @contextmanager
-def _sync_log(message: str, request_data: Any) -> Iterator[str]:
+def _sync_log(message: str, request_data: Any):
 	"""Open a Running sync log and guarantee a Failed log entry on error.
 
 	Callers are responsible for calling `update_sync_log(..., status="Success", ...)`

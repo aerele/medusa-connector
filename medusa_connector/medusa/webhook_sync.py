@@ -4,20 +4,10 @@
 """Webhook registration sync service.
 
 Reconciles the events the connector knows how to handle (the registry) with the
-webhook subscriptions actually present in Medusa:
+webhook subscriptions actually present in Medusa. Triggered by the "Sync
+Webhooks" button and by a scheduled (cron) job — there is no background job
+queued on save.
 
-1. Fetch every subscription from Medusa.
-2. Identify only those owned by this connector (receiver path / known ids).
-3. Create missing required events.
-4. Verify callback URL, event, secret (token query), and active flag; update or
-   recreate when configuration has drifted.
-5. Remove duplicate connector-owned registrations for the same event.
-6. Remove connector-owned subscriptions for events the connector no longer
-   handles.
-7. Never create, update, or delete webhooks that belong to other integrations.
-
-The operation is idempotent: repeated Sync Webhooks runs leave the connector's
-webhooks correctly configured without inventing duplicates.
 """
 
 from __future__ import annotations
@@ -40,7 +30,8 @@ STATUS_FAILED = "Failed"
 STATUS_SKIPPED = "Skipped"
 STATUS_REMOVED = "Removed"
 
-# Single-flight lock so overlapping syncs cannot create duplicate registrations.
+# Single-flight lock so overlapping syncs (button vs. cron) cannot create
+# duplicate registrations.
 SYNC_LOCK_KEY = "medusa_connector:webhook_sync_lock"
 SYNC_LOCK_TTL = 180
 
@@ -92,13 +83,7 @@ class WebhookSyncService:
 
 	# -- public API ----------------------------------------------------
 	def sync(self) -> dict:
-		"""Run one reconciliation pass under a single-flight lock.
-
-		The button, the on-save background job, and the scheduler can all trigger a
-		sync. Without a lock, two overlapping runs each see "no webhooks yet" and
-		both register every event → duplicates. The Redis lock serialises them: a
-		second caller returns ``Busy`` instead of racing.
-		"""
+		"""Run one reconciliation pass under a single-flight lock."""
 		cache = frappe.cache()
 		if not cache.set(SYNC_LOCK_KEY, "1", nx=True, ex=SYNC_LOCK_TTL):
 			return {
@@ -108,19 +93,23 @@ class WebhookSyncService:
 			}
 		try:
 			return self._run()
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Medusa Webhook Sync Failed")
+			return {
+				"status": "Error",
+				"message": frappe._("Webhook sync failed unexpectedly. Check the Error Log for details."),
+				"count": 0,
+			}
 		finally:
 			cache.delete(SYNC_LOCK_KEY)
 
 	def _run(self) -> dict:
-		"""Reconciliation pass (assumes the sync lock is held)."""
-		# Any connectivity/auth/config failure while talking to Medusa is recorded
-		# as an Error state rather than raised — the sync must never crash a save,
-		# a scheduler tick, or the button.
 		try:
 			client = MedusaClient(settings=self.settings)
 			installed = client.webhook_plugin_installed()
 			existing = client.list_webhooks() if installed else []
-		except MedusaConnectorError as exc:
+		except Exception as exc:
+			frappe.log_error(frappe.get_traceback(), "Medusa Webhook Sync Failed")
 			result = self._finish(status="Error", message=str(exc), rows=[])
 			result["instructions"] = frappe._(
 				"Could not reach Medusa or authenticate. Check the Base URL, Admin API Key, "
@@ -141,37 +130,84 @@ class WebhookSyncService:
 			result["instructions"] = plugin_setup_steps()
 			return result
 
-		rows = self._reconcile(client, existing)
-
-		# Re-fetch Medusa and heal anything still missing/wrong so a
-		# partial failure on the first pass cannot leave the registry half-applied.
 		try:
-			rows = self._verify_and_heal(client, rows)
-		except MedusaConnectorError as exc:
-			# Keep first-pass rows but surface the verification failure.
-			for row in rows:
-				if row["registration_status"] == STATUS_REGISTERED and not row.get("last_error"):
-					row["last_error"] = frappe._("Post-sync verification failed: {0}").format(str(exc))
+			rows = self._reconcile(client, existing)
+		except Exception as exc:
+			frappe.log_error(frappe.get_traceback(), "Medusa Webhook Sync Failed")
+			return self._finish(status="Error", message=str(exc), rows=[])
 
 		registered = sum(1 for r in rows if r["registration_status"] == STATUS_REGISTERED)
-		message = frappe._(
-			"Webhooks synchronised — {0} registered (created {1}, updated {2}, removed {3})."
-		).format(registered, self._created, self._updated, self._removed)
+		failed = sum(1 for r in rows if r["registration_status"] == STATUS_FAILED)
+
+		if failed:
+			message = frappe._(
+				"Sync completed with errors — {0} registered, {1} failed "
+				"(created {2}, updated {3}, removed {4})."
+			).format(registered, failed, self._created, self._updated, self._removed)
+		else:
+			message = frappe._(
+				"Sync successful — {0} webhooks registered (created {1}, updated {2}, removed {3})."
+			).format(registered, self._created, self._updated, self._removed)
+
 		return self._finish(status="Installed", message=message, rows=rows)
 
 	# -- reconciliation ------------------------------------------------
 	def _reconcile(self, client: MedusaClient, existing: list[dict]) -> list[dict]:
+		"""Identify connector webhooks, clean up old/duplicate ones, then register."""
 		ours = [w for w in existing if self._is_ours(w)]
 		desired_events = registered_events()
 		desired = set(desired_events)
+
+		by_event: dict[str, list[dict]] = {}
+		for w in ours:
+			event_type = w.get("event_type") or w.get("eventType")
+			by_event.setdefault(event_type, []).append(w)
+
 		rows: list[dict] = []
 
+		# -- clean up: orphaned events and duplicates --
+		for event_type, webhooks in list(by_event.items()):
+			if event_type not in desired:
+				for w in webhooks:
+					wid = w.get("id")
+					if not wid:
+						continue
+					try:
+						client.delete_webhook(wid)
+						self._deleted_ids.add(wid)
+						self._removed += 1
+						rows.append(self._row(event_type, STATUS_REMOVED, webhook_id=wid))
+					except Exception as exc:
+						frappe.log_error(frappe.get_traceback(), "Medusa Webhook Cleanup Failed")
+						rows.append(self._row(event_type, STATUS_FAILED, webhook_id=wid, error=str(exc)))
+				continue
+
+			if len(webhooks) > 1:
+				target_url = signed_target_url(self.secret, event_type)
+				correct = [w for w in webhooks if self._is_correct(w, event_type, target_url)]
+				keep = correct[0] if correct else webhooks[0]
+				for dup in webhooks:
+					if dup is keep:
+						continue
+					dup_id = dup.get("id")
+					if not dup_id:
+						continue
+					try:
+						client.delete_webhook(dup_id)
+						self._deleted_ids.add(dup_id)
+						self._removed += 1
+					except Exception:
+						frappe.log_error(frappe.get_traceback(), "Medusa Webhook Cleanup Failed")
+				by_event[event_type] = [keep]
+
+		# -- register: ensure exactly one correct subscription per required event --
 		for event in desired_events:
-			matches = [w for w in ours if (w.get("event_type") or w.get("eventType")) == event]
+			matches = by_event.get(event, [])
 			target_url = signed_target_url(self.secret, event)
 			try:
 				webhook_id = self._ensure_event(client, event, matches, target_url)
-			except MedusaConnectorError as exc:
+			except Exception as exc:
+				frappe.log_error(frappe.get_traceback(), "Medusa Webhook Registration Failed")
 				rows.append(self._row(event, STATUS_FAILED, error=str(exc)))
 				continue
 
@@ -182,23 +218,6 @@ class WebhookSyncService:
 			else:
 				rows.append(self._row(event, STATUS_REGISTERED, webhook_id=webhook_id))
 
-		# Remove subscriptions we own for events we no longer handle.
-		# Duplicates deleted inside ``_ensure_event`` are skipped via ``_deleted_ids``.
-		for w in ours:
-			wid = w.get("id")
-			if not wid or wid in self._deleted_ids:
-				continue
-			event_type = w.get("event_type") or w.get("eventType")
-			if event_type in desired:
-				continue
-			try:
-				client.delete_webhook(wid)
-				self._deleted_ids.add(wid)
-				self._removed += 1
-				rows.append(self._row(event_type, STATUS_REMOVED, webhook_id=wid))
-			except MedusaConnectorError as exc:
-				rows.append(self._row(event_type, STATUS_FAILED, webhook_id=wid, error=str(exc)))
-
 		return rows
 
 	def _ensure_event(
@@ -208,19 +227,13 @@ class WebhookSyncService:
 		matches: list[dict],
 		target_url: str,
 	) -> str | None:
-		"""Guarantee exactly one correct subscription for ``event``. Returns its id."""
-		# Prefer a subscription that already matches the desired configuration.
-		correct = [w for w in matches if self._is_correct(w, event, target_url)]
-		keep = correct[0] if correct else (matches[0] if matches else None)
-		dups = [w for w in matches if w is not keep]
+		"""Guarantee exactly one correct subscription for ``event``. Returns its id.
 
-		for dup in dups:
-			dup_id = dup.get("id")
-			if not dup_id or dup_id in self._deleted_ids:
-				continue
-			client.delete_webhook(dup_id)
-			self._deleted_ids.add(dup_id)
-			self._removed += 1
+		``matches`` should already contain at most one webhook (duplicates are
+		collapsed earlier in ``_reconcile``), but this still tolerates a stray
+		extra defensively.
+		"""
+		keep = matches[0] if matches else None
 
 		if keep is None:
 			created = client.create_webhook(event, target_url, active=True)
@@ -253,61 +266,6 @@ class WebhookSyncService:
 				)
 			self._created += 1
 			return webhook_id
-
-	def _verify_and_heal(self, client: MedusaClient, rows: list[dict]) -> list[dict]:
-		"""Re-list Medusa and repair any still-missing or still-wrong connector webhooks."""
-		existing = client.list_webhooks()
-		desired_events = registered_events()
-		desired = set(desired_events)
-		ours = [w for w in existing if self._is_ours(w)]
-		by_event: dict[str, list[dict]] = {}
-		for w in ours:
-			event_type = w.get("event_type") or w.get("eventType")
-			if not event_type:
-				continue
-			by_event.setdefault(event_type, []).append(w)
-
-		healed: list[dict] = []
-		for row in rows:
-			event = row.get("medusa_event")
-			if row.get("registration_status") not in (STATUS_REGISTERED, STATUS_FAILED):
-				healed.append(row)
-				continue
-			if not event or event not in desired:
-				healed.append(row)
-				continue
-
-			target_url = signed_target_url(self.secret, event)
-			matches = by_event.get(event, [])
-			correct = [w for w in matches if self._is_correct(w, event, target_url)]
-
-			if len(correct) == 1 and len(matches) == 1:
-				healed.append(self._row(event, STATUS_REGISTERED, webhook_id=correct[0].get("id")))
-				continue
-
-			# Missing, duplicate, or still wrong — run ensure again against live state.
-			try:
-				webhook_id = self._ensure_event(client, event, matches, target_url)
-				healed.append(self._row(event, STATUS_REGISTERED, webhook_id=webhook_id))
-			except MedusaConnectorError as exc:
-				healed.append(
-					self._row(
-						event,
-						STATUS_FAILED,
-						webhook_id=row.get("webhook_id"),
-						error=str(exc),
-					)
-				)
-
-		# Preserve Removed rows from the first pass (not re-derived from the re-list).
-		removed = [r for r in rows if r.get("registration_status") == STATUS_REMOVED]
-		# De-dupe by event: prefer healed/registered rows over removed for same event.
-		healed_events = {r.get("medusa_event") for r in healed}
-		for r in removed:
-			if r.get("medusa_event") not in healed_events:
-				healed.append(r)
-
-		return healed
 
 	def _is_ours(self, webhook: dict) -> bool:
 		"""Return True only for webhooks owned by this ERPNext site."""
@@ -350,27 +308,17 @@ class WebhookSyncService:
 		}
 
 	def _finish(self, status: str, message: str, rows: list[dict]) -> dict:
-		"""Persist results WITHOUT bumping the parent's ``modified``.
+		"""Persist the sync result on a fresh copy of Medusa Settings."""
+		doc = frappe.get_doc("Medusa Settings")
+		doc.webhook_plugin_status = status
+		doc.last_webhook_sync = now_datetime()
+		doc.last_webhook_sync_message = message
 
-		This runs from a background job/scheduler while an operator may have the
-		Settings form open. A normal ``doc.save()`` would advance ``modified`` and
-		make their next save fail with a TimestampMismatchError, so status fields
-		are written via ``set_value(update_modified=False)`` and the child table is
-		rewritten directly — the parent timestamp (and the operator's form) is left
-		untouched.
-		"""
-		parent = "Medusa Settings"
-		frappe.db.set_single_value(
-			parent,
-			{
-				"webhook_plugin_status": status,
-				"last_webhook_sync": now_datetime(),
-				"last_webhook_sync_message": message,
-			},
-			update_modified=False,
-		)
-		self._replace_child_rows(parent, rows)
-		frappe.clear_document_cache(parent, parent)
+		doc.set("webhook_subscriptions", [])
+		for row in rows:
+			doc.append("webhook_subscriptions", row)
+		doc.save()
+
 		return {
 			"status": status,
 			"message": message,
@@ -379,44 +327,3 @@ class WebhookSyncService:
 			"updated": self._updated,
 			"removed": self._removed,
 		}
-
-	@staticmethod
-	def _replace_child_rows(parent: str, rows: list[dict]) -> None:
-		"""Replace the webhook registration child table without updating the parent."""
-		frappe.db.delete(
-			"Medusa Webhook Registration",
-			{"parent": parent, "parenttype": parent, "parentfield": "webhook_subscriptions"},
-		)
-
-		for idx, row in enumerate(rows, start=1):
-			child = frappe.get_doc(
-				{
-					"doctype": "Medusa Webhook Registration",
-					"parent": parent,
-					"parenttype": parent,
-					"parentfield": "webhook_subscriptions",
-					"idx": idx,
-					**row,
-				}
-			)
-			child.name = frappe.generate_hash(length=10)
-			child.db_insert()
-
-
-def sync_webhooks() -> dict:
-	"""Module-level entry point used by the button and save hook."""
-	return WebhookSyncService().sync()
-
-
-def scheduled_webhook_sync() -> None:
-	"""Hourly scheduler hook: heal webhook drift while the connector is enabled."""
-	if not frappe.db.get_single_value("Medusa Settings", "enabled"):
-		return
-
-	try:
-		WebhookSyncService().sync()
-	except Exception:
-		frappe.log_error(
-			title="Scheduled webhook sync failed",
-			message=frappe.get_traceback(with_context=True),
-		)
