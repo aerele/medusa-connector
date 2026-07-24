@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import frappe
+from ecommerce_core.utils.address_mapping import get_country_name
 
 from medusa_connector.constants import SETTING_DOCTYPE
 
@@ -77,16 +78,7 @@ class HSNService:
 	def apply_country(item, origin_country: str | None) -> None:
 		if not origin_country:
 			return
-
-		if not frappe.get_meta("Item").has_field("country_of_origin"):
-			return
-		# Medusa uses ISO-2; ERPNext Country is full name — match by code or name.
-		country = frappe.db.get_value(
-			"Country",
-			{"code": str(origin_country).strip()},
-			"name",
-		)
-
+		country = get_country_name(str(origin_country).strip().upper())
 		if country:
 			item.country_of_origin = country
 

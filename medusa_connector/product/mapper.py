@@ -48,6 +48,7 @@ class ProductMapper:
 		discountable = product.get("discountable")
 		external_id = product.get("external_id")
 		updated_at = product.get("updated_at")
+		origin_country = product.get("origin_country")
 
 		options = product.get("options") or []
 		variants = product.get("variants") or []
@@ -66,7 +67,6 @@ class ProductMapper:
 		dims = self._resolve_product_dimensions(product, primary_variant, has_variants)
 		product_hs = self._extract_hs_code(product, metadata)
 		hs_code = self._resolve_hs_code(primary_variant, product_hs, has_variants)
-
 		# Classifications & Media
 		images = self._all_image_urls(product)
 		thumbnail = thumbnail or (images[0] if images else None)
@@ -113,6 +113,7 @@ class ProductMapper:
 			"medusa_inventory_item_id": inventory_item_id,
 			"gst_hsn_code": hs_code,
 			"product_hs_code": product_hs,
+			"origin_country": origin_country,
 			"material": material or ((primary_variant or {}).get("material") if not has_variants else None),
 			"weight": dims.get("weight"),
 			"length": dims.get("length"),

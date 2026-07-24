@@ -1,46 +1,14 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
-"""Medusa-facing wrappers around Ecommerce Core integration logging.
+"""Logging utilities for Medusa sync and webhook operations.
 
-All sync/webhook outcomes go to **Ecommerce Integration Log** via ``create_log(module_def=...)``.
-
-``@logged_sync`` is the ONLY code allowed to write the outcome log for a sync
-entry point (OrderSync.sync/cancel, FulfillmentSync.sync/cancel,
-RefundSync.process, ...). Before this, every one of those methods hand-rolled:
-
-    frappe.set_user("Administrator")
-    if request_id: frappe.flags.request_id = request_id
-    try:
-        ...
-        create_medusa_log(status="Success", ...)
-        return value
-    except Exception as exc:
-        create_medusa_log(status="Error", exception=exc, rollback=True, ...)
-        return None
-
-That pattern is exactly why a failed webhook could show "Success": several
-services deliberately don't raise on failure, they *return* a result dict
-(``{"status": "error", ...}``) — but nothing downstream ever looked inside
-that dict, so "no exception" silently became "Success".
-
-New contract for anything wrapped with ``@logged_sync``:
-  - return ``result(...)`` (see order/_shared.py) -> status is read straight
-    from ``value["status"]`` and mapped via ``_RESULT_STATUS_MAP`` below
-  - return anything else (str, None, a doc) -> treated as Success (legacy
-    shape; prefer migrating to ``result(...)``)
-  - raise -> Error, logged with ``rollback=True``
-
-Only ONE log write happens per decorated call. If a decorated method needs
-to redirect into another decorated method on the *same* instance (e.g.
-FulfillmentSync.sync() discovering the event is actually a cancel), call the
-undecorated `_impl` method directly — never call the sibling public method,
-or you'll get two log rows for one event.
+Provides centralized logging for sync outcomes and the ``@logged_sync``
+decorator for consistent Success, Invalid, and Error status handling.
 """
 
 from __future__ import annotations
 
 import functools
-import json
 
 import frappe
 from ecommerce_core.ecommerce_core.doctype.ecommerce_integration_log.ecommerce_integration_log import (
