@@ -9,25 +9,17 @@ import frappe
 from medusa_connector.constants import MODULE_NAME
 from medusa_connector.utils.logging import (
 	create_medusa_log,
-	find_webhook_log_by_event_id,
 	webhook_message_key,
 )
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])  # nosemgrep
 def receive() -> dict:
-	"""Receive, authenticate, log and enqueue a Medusa webhook.
-
-	URL: ``/api/method/medusa_connector.api.webhook.receive`` (optionally with a
-	``?token=`` query param — required for the Medusa webhooks plugin, which cannot
-	HMAC-sign deliveries).
-	"""
 	settings = frappe.get_cached_doc("Medusa Settings")
-
 	raw = frappe.request.data or b""
 	headers = dict(frappe.request.headers)
-	authentic = authenticate(settings)
-	if not authentic:
+
+	if not authenticate(settings):
 		create_medusa_log(
 			status="Error",
 			method="medusa_connector.api.webhook.receive",
@@ -35,9 +27,8 @@ def receive() -> dict:
 			request_data={
 				"headers": _safe_headers(headers),
 				"payload": _decode_raw(raw),
-				"signature_valid": False,
 			},
-			exception="Invalid or missing signature/token",
+			exception="Invalid or missing webhook token",
 			make_new=True,
 		)
 		frappe.local.response["http_status_code"] = 401
@@ -45,16 +36,58 @@ def receive() -> dict:
 
 	try:
 		body = json.loads(raw or b"{}")
-	except (ValueError, TypeError):
+	except (json.JSONDecodeError, TypeError):
+		frappe.log_error(
+			title="Medusa Webhook Invalid Payload",
+			message=_decode_raw(raw),
+		)
 		frappe.local.response["http_status_code"] = 400
 		return {"status": "invalid_payload"}
 
-	# Delivery id for at-least-once dedupe (not the resource id).
-	event_id = body.get("event_id") or frappe.generate_hash(length=16)
-	event_name = frappe.request.args.get("event") or body.get("event")
+	if not isinstance(body, dict):
+		frappe.log_error(
+			title="Medusa Webhook Invalid Payload",
+			message=json.dumps(body, indent=2, default=str),
+		)
+		frappe.local.response["http_status_code"] = 400
+		return {"status": "invalid_payload"}
 
-	if event_id and find_webhook_log_by_event_id(event_id):
-		return {"status": "duplicate", "event_id": event_id}
+	event_name = frappe.request.args.get("event")
+
+	if not event_name:
+		frappe.log_error(
+			title="Medusa Webhook Missing Event",
+			message=json.dumps(
+				{
+					"headers": _safe_headers(headers),
+					"payload": body,
+				},
+				indent=2,
+				default=str,
+			),
+		)
+		frappe.local.response["http_status_code"] = 400
+		return {"status": "missing_event"}
+
+	entity_id = body.get("id")
+
+	if not entity_id:
+		frappe.log_error(
+			title="Medusa Webhook Missing Entity ID",
+			message=json.dumps(
+				{
+					"event_name": event_name,
+					"headers": _safe_headers(headers),
+					"payload": body,
+				},
+				indent=2,
+				default=str,
+			),
+		)
+		frappe.local.response["http_status_code"] = 400
+		return {"status": "missing_entity_id"}
+
+	event_id = f"{event_name}:{entity_id}"
 
 	log = create_medusa_log(
 		status="Queued",
@@ -64,8 +97,7 @@ def receive() -> dict:
 			"event_id": event_id,
 			"event_name": event_name,
 			"headers": _safe_headers(headers),
-			"payload": body if body else _decode_raw(raw),
-			"signature_valid": authentic,
+			"payload": body,
 			"integration": MODULE_NAME,
 		},
 		make_new=True,
@@ -76,34 +108,21 @@ def receive() -> dict:
 		queue="short",
 		enqueue_after_commit=True,
 		log_name=log.name,
-		request_id=log.name,
 	)
 
 	return {"status": "accepted", "log": log.name}
 
 
 def authenticate(settings) -> bool:
-	"""Return True if the request proves it came from the configured Medusa."""
 	secret = settings.get_password("webhook_secret", raise_exception=False)
-	if not secret:
-		return False
-
 	token = frappe.request.args.get("token")
-	return bool(token) and hmac.compare_digest(token, secret)
+
+	return bool(secret and token) and hmac.compare_digest(token, secret)
 
 
 def _decode_raw(raw: bytes | str) -> str:
-	if isinstance(raw, bytes):
-		return raw.decode("utf-8", errors="replace")
-	return str(raw)
+	return raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
 
 
 def _safe_headers(headers: dict) -> dict:
-	"""Drop huge/binary values so the log stays readable."""
-	out = {}
-	for key, value in (headers or {}).items():
-		try:
-			out[str(key)] = str(value)[:500]
-		except Exception:
-			continue
-	return out
+	return {str(key): str(value)[:500] for key, value in (headers or {}).items()}

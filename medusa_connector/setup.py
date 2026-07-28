@@ -111,6 +111,26 @@ def setup_custom_fields(update: bool = True) -> None:
 				"no_copy": 1,
 			},
 		],
+		"Item": [
+			{
+				"fieldname": "medusa_custom_length",
+				"label": "Length (Medusa)",
+				"fieldtype": "Float",
+				"insert_after": "weight_uom",
+			},
+			{
+				"fieldname": "medusa_custom_width",
+				"label": "Width (Medusa)",
+				"fieldtype": "Float",
+				"insert_after": "medusa_custom_length",
+			},
+			{
+				"fieldname": "medusa_custom_height",
+				"label": "Height (Medusa)",
+				"fieldtype": "Float",
+				"insert_after": "medusa_custom_width",
+			},
+		],
 		"Sales Order": [
 			_order_id_field("naming_series"),
 			_order_number_field(ORDER_ID_FIELD),

@@ -16,7 +16,7 @@ from ecommerce_core.ecommerce_core.doctype.ecommerce_integration_log.ecommerce_i
 )
 from frappe.utils import cstr, now_datetime
 
-from medusa_connector.constants import MODULE_NAME
+from medusa_connector.constants import _RESULT_STATUS_MAP, MODULE_NAME
 
 
 def create_medusa_log(**kwargs):
@@ -118,27 +118,10 @@ def webhook_message_key(event_id: str) -> str:
 	return f"webhook:{cstr(event_id)}"
 
 
-def find_webhook_log_by_event_id(event_id: str) -> str | None:
-	if not event_id:
-		return None
-	return frappe.db.get_value(
-		"Ecommerce Integration Log",
-		{"integration": MODULE_NAME, "message": webhook_message_key(event_id)},
-		"name",
-	)
-
-
 # ---------------------------------------------------------------------------
 # @logged_sync — the single place that decides Success/Invalid/Error for a
 # sync entry point. See module docstring for the contract.
 # ---------------------------------------------------------------------------
-
-_RESULT_STATUS_MAP = {
-	"success": "Success",
-	"skipped": "Success",
-	"invalid": "Invalid",
-	"error": "Error",
-}
 
 
 def logged_sync(dotted_method: str):
