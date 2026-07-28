@@ -83,10 +83,47 @@ class HSNService:
 			item.country_of_origin = country
 
 	@staticmethod
-	def ensure_barcode(item, barcode: str) -> None:
-		barcode = str(barcode).strip()
-		if not barcode:
-			return
-		existing = {row.barcode for row in item.barcodes or []}
-		if barcode not in existing:
-			item.append("barcodes", {"barcode": barcode})
+	def ensure_barcodes(
+		item, barcode: str | None = None, ean: str | None = None, upc: str | None = None
+	) -> bool:
+		"""Add barcode, EAN, and UPC values to the Item Barcode child table."""
+
+		changed = False
+		existing_barcodes = {row.barcode for row in item.barcodes or [] if row.barcode}
+
+		barcode_values = {
+			str(value).strip(): barcode_type
+			for value, barcode_type in (
+				(barcode, None),
+				(ean, "EAN"),
+				(upc, "UPC"),
+			)
+			if value
+		}
+
+		if not barcode_values:
+			return False
+
+		existing_barcodes_in_db = {
+			row.barcode
+			for row in frappe.get_all(
+				"Item Barcode",
+				filters={"barcode": ["in", list(barcode_values)]},
+				fields=["barcode"],
+			)
+		}
+
+		for barcode_value, barcode_type in barcode_values.items():
+			if barcode_value in existing_barcodes or barcode_value in existing_barcodes_in_db:
+				continue
+
+			barcode_row = {"barcode": barcode_value}
+
+			if barcode_type:
+				barcode_row["barcode_type"] = barcode_type
+
+			item.append("barcodes", barcode_row)
+			existing_barcodes.add(barcode_value)
+			changed = True
+
+		return changed

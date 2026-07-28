@@ -1,12 +1,5 @@
 # Copyright (c) 2026, Aerele and contributors
 # For license information, please see license.txt
-"""Shared helpers for the order domain.
-
-Kept deliberately small — only logic genuinely used by more than one
-order-domain service lives here (``OrderSync``, ``SalesOrderSync``,
-``FulfillmentSync``, ``RefundSync``). Payment-specific helpers live in
-``payment_sync.py`` instead.
-"""
 
 from __future__ import annotations
 
@@ -19,35 +12,35 @@ from medusa_connector.constants import MODULE_NAME
 
 
 def result(status: str, **kwargs) -> dict[str, Any]:
-	out: dict[str, Any] = {"status": status}
-	out.update({k: v for k, v in kwargs.items() if v is not None})
+	out = {"status": status}
+	out.update({key: value for key, value in kwargs.items() if value is not None})
 	return out
 
 
 def status_label(order: dict) -> str:
 	parts = [
-		cstr(order.get("status") or ""),
-		cstr(order.get("payment_status") or ""),
-		cstr(order.get("fulfillment_status") or ""),
+		cstr(order.get("status")),
+		cstr(order.get("payment_status")),
+		cstr(order.get("fulfillment_status")),
 	]
-	return " / ".join(p for p in parts if p)[:140]
+	return " / ".join(part for part in parts if part)[:140]
 
 
 def cancel_doc(doctype: str, name: str) -> bool:
-	"""Cancel a submitted document. True if cancelled (or already cancelled)."""
 	doc = frappe.get_doc(doctype, name)
+
 	if doc.docstatus == 2:
 		return True
+
 	if doc.docstatus != 1:
 		return False
+
 	doc.cancel()
 	return True
 
 
 def resolve_item_code(line_item: dict) -> str | None:
-	from ecommerce_core.ecommerce_core.doctype.ecommerce_item.ecommerce_item import (
-		get_erpnext_item,
-	)
+	from ecommerce_core.ecommerce_core.doctype.ecommerce_item.ecommerce_item import get_erpnext_item
 
 	if not isinstance(line_item, dict):
 		return None
@@ -57,6 +50,7 @@ def resolve_item_code(line_item: dict) -> str | None:
 		variant = {}
 
 	product_id = line_item.get("product_id")
+
 	if not product_id:
 		return None
 

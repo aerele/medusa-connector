@@ -45,8 +45,6 @@ class ProductMapper:
 		status = str(product.get("status") or "draft").strip().lower()
 		thumbnail = product.get("thumbnail")
 		material = product.get("material")
-		discountable = product.get("discountable")
-		external_id = product.get("external_id")
 		updated_at = product.get("updated_at")
 		origin_country = product.get("origin_country")
 
@@ -54,7 +52,7 @@ class ProductMapper:
 		variants = product.get("variants") or []
 		metadata = self._metadata(product)
 
-		has_variants = self._has_variants(options, variants)
+		has_variants = self._has_variants(product)
 		primary_variant = variants[0] if variants else None
 
 		primary_sku = primary_variant.get("sku") if primary_variant else None
@@ -121,8 +119,6 @@ class ProductMapper:
 			"height": dims.get("height"),
 			"manage_inventory": manage_inventory,
 			"is_stock_item": is_stock_item,
-			"discountable": discountable,
-			"external_id": external_id,
 			"product_type": self._product_type(product),
 			"collection": self._collection_title(product),
 			"brand": self._brand_name(product, metadata),
@@ -290,18 +286,14 @@ class ProductMapper:
 		return "\n\n".join(p for p in parts if p)
 
 	@staticmethod
-	def _has_variants(options: list, variants: list) -> bool:
-		"""Detect ERPNext template products (i.e. products with more than
-		one real, sellable Medusa variant).
+	def _has_variants(product) -> bool:
+		"""Return True when the product has real variant options."""
+		for option in product.get("options") or []:
+			for value in option.get("values") or []:
+				if value.get("value") != "Default option value":
+					return True
 
-		This looks ONLY at the actual `variants` array, never at option
-		*definitions* — option values can be stale or "planned" (edited in
-		Medusa without regenerating variants), which would misclassify
-		genuinely single-variant products as templates. The only thing that
-		determines ERPNext template vs. simple-item structure is how many
-		sellable variants exist.
-		"""
-		return len(variants) > 1
+		return False
 
 	@staticmethod
 	def _first_image_url(product: dict) -> str | None:

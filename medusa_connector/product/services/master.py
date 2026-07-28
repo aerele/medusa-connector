@@ -28,7 +28,7 @@ class MasterService:
 		doc = {"doctype": doctype, name_field: name}
 		if extra:
 			doc.update(extra)
-		frappe.get_doc(doc).insert(ignore_permissions=True)
+		frappe.get_doc(doc).insert()
 		return name
 
 	# UOM
@@ -39,27 +39,26 @@ class MasterService:
 
 	# Item Group
 	def ensure_item_group(self, mapped: dict) -> str:
-		"""Resolve/create Item Group from categories (hierarchy) or mapped name."""
-		categories = mapped.get("categories") or []
-		# Prefer deepest category with parent when auto-creating hierarchy.
-		if categories:
-			for cat in categories:
-				name = cat.get("name")
-				if not name:
-					continue
-				parent_name = cat.get("parent_name")
-				return self.ensure_group(name, parent_name)
-		name = mapped.get("item_group") or self.settings.get("item_group") or DEFAULT_ITEM_GROUP
-		return self.ensure_group(name, None)
+		"""Resolve/create Item Group from the first non-empty Medusa category, or mapped name.
 
-	def ensure_group(self, name: str, parent_name: str | None) -> str:
+		Medusa categories (see ProductMapper._categories) only carry id/name —
+		there is no parent relationship available — so this always creates/uses
+		a top-level Item Group under the Item Group root.
+		"""
+		categories = mapped.get("categories") or []
+		for cat in categories:
+			name = cat.get("name")
+			if name:
+				return self.ensure_group(name)
+
+		name = mapped.get("item_group") or self.settings.get("item_group") or DEFAULT_ITEM_GROUP
+		return self.ensure_group(name)
+
+	def ensure_group(self, name: str) -> str:
 		name = (name or DEFAULT_ITEM_GROUP).strip()
-		# Check first, before resolving the parent — avoids an unnecessary
-		# recursive ensure_group()/get_root_of() call when the group
-		# already exists.
 		if frappe.db.exists("Item Group", name):
 			return name
-		parent = self.ensure_group(parent_name, None) if parent_name else get_root_of("Item Group")
+		parent = get_root_of("Item Group")
 		return self.get_or_create(
 			"Item Group",
 			name,

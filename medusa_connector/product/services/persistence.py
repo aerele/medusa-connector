@@ -19,10 +19,10 @@ class PersistenceService:
 	def save(self, doc) -> None:
 		"""Insert or save a document."""
 		if doc.is_new():
-			doc.insert(ignore_permissions=True)
+			doc.insert()
 			return
 
-		doc.save(ignore_permissions=True)
+		doc.save()
 
 	@staticmethod
 	def set_item_save_flags(item) -> None:

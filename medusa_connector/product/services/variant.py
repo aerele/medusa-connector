@@ -141,26 +141,26 @@ class VariantService:
 			variant,
 		)
 
-	def apply_variant_fields(
-		self,
-		item,
-		variant: dict,
-	) -> bool:
+	def apply_variant_fields(self, item, variant: dict) -> bool:
 		"""Apply Medusa variant fields and return whether Item changed."""
-
 		changed = False
 
 		if variant.get("item_name"):
 			item_name = variant["item_name"][:140]
-
 			if item.item_name != item_name:
 				item.item_name = item_name
 				changed = True
 
-		if variant.get("image"):
-			if item.image != variant["image"]:
-				item.image = variant["image"]
+		if "allow_backorder" in variant:
+			allow_negative_stock = int(bool(variant.get("allow_backorder")))
+
+			if item.allow_negative_stock != allow_negative_stock:
+				item.allow_negative_stock = allow_negative_stock
 				changed = True
+
+		if variant.get("image") and item.image != variant["image"]:
+			item.image = variant["image"]
+			changed = True
 
 		if variant.get("weight") is not None:
 			weight = flt(variant["weight"])
@@ -175,6 +175,19 @@ class VariantService:
 				item.weight_uom = weight_uom
 				changed = True
 
+		item_meta = frappe.get_meta("Item")
+
+		for fieldname in ("length", "width", "height"):
+			value = variant.get(fieldname)
+			custom_fieldname = f"medusa_custom_{fieldname}"
+
+			if not item_meta.has_field(custom_fieldname):
+				continue
+
+			if value is not None and item.get(custom_fieldname) != value:
+				item.set(custom_fieldname, value)
+				changed = True
+
 		if "disabled" in variant:
 			disabled = int(variant.get("disabled") or 0)
 
@@ -183,15 +196,12 @@ class VariantService:
 				changed = True
 
 		if "manage_inventory" in variant:
-			is_stock_item = 1 if variant.get("manage_inventory") else 0
+			is_stock_item = int(bool(variant.get("manage_inventory")))
 
 			if item.is_stock_item != is_stock_item:
 				item.is_stock_item = is_stock_item
 				changed = True
 
-		# Country of origin.
-		# HSNService.apply_country() currently returns None,
-		# so compare the value before and after applying it.
 		before_country = item.get("country_of_origin")
 
 		self.hsn.apply_country(
@@ -202,30 +212,15 @@ class VariantService:
 		if item.get("country_of_origin") != before_country:
 			changed = True
 
-		# HSN / HSN fallback:
-		# variant gst_hsn_code → product_hs_code → clear if both blank.
-		hsn_changed = self.hsn.apply_variant_hsn_code(
-			item,
-			variant,
-		)
-
-		if hsn_changed:
+		if self.hsn.apply_variant_hsn_code(item, variant):
 			changed = True
 
-		# Barcode.
-		# ensure_barcode() mutates the child table but currently
-		# returns None, so detect the change by comparing before/after.
-		if variant.get("barcode"):
-			before_barcodes = {row.barcode for row in item.barcodes or []}
-
-			self.hsn.ensure_barcode(
-				item,
-				variant["barcode"],
-			)
-
-			after_barcodes = {row.barcode for row in item.barcodes or []}
-
-			if after_barcodes != before_barcodes:
-				changed = True
+		if self.hsn.ensure_barcodes(
+			item,
+			barcode=variant.get("barcode"),
+			ean=variant.get("ean"),
+			upc=variant.get("upc"),
+		):
+			changed = True
 
 		return changed

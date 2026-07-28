@@ -72,4 +72,4 @@ class PriceService:
 				"price_list_rate": rate,
 				"selling": 1,
 			}
-		).insert(ignore_permissions=True)
+		).insert()
