@@ -155,7 +155,6 @@ function toggle_buttons(frm) {
 			// Webhooks and sync jobs share Ecommerce Integration Log.
 			frappe.set_route("List", "Ecommerce Integration Log", {
 				integration: "Medusa Connector",
-				method: ["like", "%dispatch_event%"],
 			});
 		},
 		__("Webhooks")

@@ -5,6 +5,7 @@ import secrets
 from urllib.parse import urlparse
 
 import frappe
+import requests
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, get_datetime, now_datetime
@@ -281,6 +282,26 @@ class MedusaSettings(Document):
 		self.connection_status = "Disconnected"
 		self.last_connection_test = now_datetime()
 		self.last_connection_message = _("Connector is disabled.")
+		for fieldname in (
+			"medusa_store_id",
+			"default_sales_channel_id",
+			"default_currency",
+			"default_region_id",
+			"default_location_id",
+			"last_store_defaults_sync",
+			"webhook_secret",
+			"webhook_receiver_url",
+			"webhook_plugin_status",
+			"last_webhook_sync",
+			"last_webhook_sync_message",
+			"last_product_sync",
+			"last_product_sync_message",
+			"last_inventory_sync",
+		):
+			self.set(fieldname, None)
+
+		self.set("webhook_subscriptions", [])
+		self.set("warehouse_mapping", [])
 
 	def _normalize_url(self, url_str: str) -> str:
 		if not url_str:
@@ -322,19 +343,19 @@ class MedusaSettings(Document):
 
 def _throw_medusa_api_error(exc: Exception) -> None:
 	"""Raise a clear user-facing error for Medusa API failures."""
-	from medusa_connector.medusa.exceptions import MedusaAuthError, MedusaConnectionError
+	if isinstance(exc, requests.HTTPError):
+		status_code = exc.response.status_code if exc.response is not None else None
 
-	if isinstance(exc, MedusaAuthError):
-		frappe.throw(
-			_("Unable to sign in to Medusa. Please check the Admin API Key."),
-			title=_("Authentication Failed"),
-		)
-	if isinstance(exc, MedusaConnectionError):
-		frappe.throw(
-			_(str(exc)) if str(exc) else _("Could not connect to Medusa. Please check the Base URL."),
-			title=_("Connection Failed"),
-		)
-	raise exc
+		if status_code in (401, 403):
+			frappe.throw(
+				_("Unable to sign in to Medusa. Please check the Admin API Key."),
+				title=_("Authentication Failed"),
+			)
+
+	frappe.throw(
+		_(str(exc)) if str(exc) else _("Could not connect to Medusa. Please check the Base URL."),
+		title=_("Connection Failed"),
+	)
 
 
 def _list_all_stock_locations(client) -> list[dict]:
@@ -357,7 +378,7 @@ def sync_webhooks() -> dict:
 	"""Reconcile Medusa webhooks with the current settings."""
 	from medusa_connector.medusa.webhook_sync import WebhookSyncService
 
-	return WebhookSyncService().sync()
+	return WebhookSyncService().sync_webhooks()
 
 
 @frappe.whitelist()
