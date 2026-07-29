@@ -6,14 +6,21 @@ from __future__ import annotations
 import frappe
 from frappe.utils import cstr
 
-from medusa_connector.constants import FULFILLMENT_ID_FIELD, ORDER_ID_FIELD, SETTING_DOCTYPE
+from medusa_connector.constants import (
+	FULFILLMENT_ID_FIELD,
+	ORDER_ID_FIELD,
+	SETTING_DOCTYPE,
+)
 from medusa_connector.medusa.order import OrderService
 from medusa_connector.medusa.payment import PaymentService
 from medusa_connector.order._shared import result
+from medusa_connector.order.claim_sync import ClaimSync
+from medusa_connector.order.exchange_sync import ExchangeSync
 from medusa_connector.order.fulfillment import FulfillmentSync
 from medusa_connector.order.invoice import InvoiceSync
 from medusa_connector.order.payment_sync import PaymentSync
 from medusa_connector.order.refund import RefundSync
+from medusa_connector.order.return_sync import ReturnSync
 from medusa_connector.order.sync import OrderSync
 from medusa_connector.webhook.dispatch import MedusaEvent
 from medusa_connector.webhook.registry import register
@@ -340,7 +347,97 @@ class PaymentHandler:
 @register("order.return_requested", "order.return_received")
 class ReturnHandler:
 	def handle(self, event: MedusaEvent) -> dict:
-		return result(
-			"skipped",
-			message=f"{event.name}: return {event.entity_id} (sync pending)",
+		entity = event.data if isinstance(event.data, dict) else {}
+		return_id = cstr(entity.get("id") or entity.get("return_id") or event.entity_id or "")
+		order_id = cstr(entity.get("order_id") or "")
+
+		if not return_id:
+			return result(
+				"invalid",
+				message=f"{event.name}: missing return id",
+			)
+
+		sync = ReturnSync()
+		res = sync.process(
+			return_id=return_id,
+			order_id=order_id or None,
+			request_id=event.log_name,
 		)
+
+		return {
+			**res,
+			"message": (
+				f"{event.name}: {res.get('status')} "
+				f"return={return_id} "
+				f"order={order_id or res.get('order_id') or '-'} "
+				f"DN={res.get('delivery_note') or '-'} "
+				f"— {res.get('message') or ''}"
+			).strip(),
+		}
+
+
+@register("order.claim_created")
+class ClaimHandler:
+	def handle(self, event: MedusaEvent) -> dict:
+		entity = event.data if isinstance(event.data, dict) else {}
+		claim_id = cstr(entity.get("id") or entity.get("claim_id") or event.entity_id or "")
+		order_id = cstr(entity.get("order_id") or "")
+
+		if not claim_id:
+			return result(
+				"invalid",
+				message=f"{event.name}: missing claim id",
+			)
+
+		sync = ClaimSync()
+		res = sync.process(
+			claim_id=claim_id,
+			order_id=order_id or None,
+			request_id=event.log_name,
+		)
+
+		return {
+			**res,
+			"message": (
+				f"{event.name}: {res.get('status')} "
+				f"claim={claim_id} "
+				f"order={order_id or res.get('order_id') or '-'} "
+				f"DN={res.get('delivery_note') or '-'} "
+				f"SI={res.get('sales_invoice') or '-'} "
+				f"PE={res.get('payment_entry') or '-'} "
+				f"— {res.get('message') or ''}"
+			).strip(),
+		}
+
+
+@register("order.exchange_created")
+class ExchangeHandler:
+	def handle(self, event: MedusaEvent) -> dict:
+		entity = event.data if isinstance(event.data, dict) else {}
+		exchange_id = cstr(entity.get("id") or entity.get("exchange_id") or event.entity_id or "")
+		order_id = cstr(entity.get("order_id") or "")
+
+		if not exchange_id:
+			return result(
+				"invalid",
+				message=f"{event.name}: missing exchange id",
+			)
+
+		sync = ExchangeSync()
+		res = sync.process(
+			exchange_id=exchange_id,
+			order_id=order_id or None,
+			request_id=event.log_name,
+		)
+
+		return {
+			**res,
+			"message": (
+				f"{event.name}: {res.get('status')} "
+				f"exchange={exchange_id} "
+				f"order={order_id or res.get('order_id') or '-'} "
+				f"Return DN={res.get('return_dn') or '-'} "
+				f"New DN={res.get('delivery_note') or '-'} "
+				f"— {res.get('message') or ''}"
+			).strip(),
+		}

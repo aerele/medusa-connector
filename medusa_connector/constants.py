@@ -34,6 +34,9 @@ MEDUSA_WEBHOOK_EVENTS = (
 	# Return
 	"order.return_requested",
 	"order.return_received",
+	# Claims & Exchanges
+	"order.claim_created",
+	"order.exchange_created",
 )
 
 
@@ -57,6 +60,9 @@ ORDER_ITEM_DISCOUNT_FIELD = "medusa_item_discount"
 
 FULFILLMENT_ID_FIELD = "medusa_fulfillment_id"
 REFUND_ID_FIELD = "medusa_refund_id"
+RETURN_ID_FIELD = "medusa_return_id"
+CLAIM_ID_FIELD = "medusa_claim_id"
+EXCHANGE_ID_FIELD = "medusa_exchange_id"
 
 DEFAULT_ORDER_FIELDS = (
 	"*items,*items.variant,*items.tax_lines,"

@@ -69,7 +69,7 @@ def receive() -> dict:
 		frappe.local.response["http_status_code"] = 400
 		return {"status": "missing_event"}
 
-	entity_id = body.get("id")
+	entity_id = _get_entity_id(event_name, body)
 
 	if not entity_id:
 		frappe.log_error(
@@ -126,3 +126,19 @@ def _decode_raw(raw: bytes | str) -> str:
 
 def _safe_headers(headers: dict) -> dict:
 	return {str(key): str(value)[:500] for key, value in (headers or {}).items()}
+
+
+def _get_entity_id(event_name: str, payload: dict) -> str | None:
+	"""Return the entity ID used to uniquely identify a webhook event."""
+	if payload.get("id"):
+		return payload["id"]
+
+	event_entity_ids = {
+		"order.fulfillment_created": "order_id",
+		"order.shipment_created": "order_id",
+		"order.return_requested": "order_id",
+		"order.return_received": "order_id",
+	}
+
+	entity_field = event_entity_ids.get(event_name)
+	return payload.get(entity_field) if entity_field else None
