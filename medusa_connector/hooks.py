@@ -163,7 +163,7 @@ doc_events = {
 # Testing
 # -------
 
-# before_tests = "medusa_connector.install.before_tests"
+before_tests = "ecommerce_core.utils.before_test.before_tests"
 
 # Extend DocType Class
 # ------------------------------
