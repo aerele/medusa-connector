@@ -12,7 +12,7 @@ use_json_request_body = True
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext", "ecommerce_core"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -90,7 +90,7 @@ use_json_request_body = True
 # ------------
 
 # before_install = "medusa_connector.install.before_install"
-# after_install = "medusa_connector.install.after_install"
+after_install = "medusa_connector.setup.after_install"
 
 # Uninstallation
 # ------------
@@ -154,22 +154,12 @@ use_json_request_body = True
 # ---------------
 
 # scheduler_events = {
-# 	"all": [
-# 		"medusa_connector.tasks.all"
-# 	],
-# 	"daily": [
-# 		"medusa_connector.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"medusa_connector.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"medusa_connector.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"medusa_connector.tasks.monthly"
-# 	],
+
 # }
+
+# Desk page client scripts are loaded automatically from page/ folders.
+# Keep log retention configurable.
+
 
 # Testing
 # -------
@@ -264,4 +254,3 @@ require_type_annotated_api_methods = True
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-
