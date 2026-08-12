@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "creation": "2026-08-11 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "medusa_tax_or_shipping_id",
+  "column_break_tax_id",
+  "tax_name",
+  "tax_code",
+  "column_break_tax_details",
+  "tax_rate",
+  "erpnext_account"
+ ],
+ "fields": [
+  {
+   "fieldname": "column_break_tax_id",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Display name from Medusa (e.g., 'CGST', 'SGST')",
+   "fieldname": "tax_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tax Name"
+  },
+  {
+   "description": "Tax code from Medusa (e.g., 'TAX-1')",
+   "fieldname": "tax_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tax Code"
+  },
+  {
+   "fieldname": "column_break_tax_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Tax rate percentage (e.g., 9 for 9%)",
+   "fieldname": "tax_rate",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Tax Rate"
+  },
+  {
+   "fieldname": "erpnext_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "ERPNext Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "description": "Unique identifier from Medusa tax rate",
+   "fieldname": "medusa_tax_or_shipping_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Medusa Tax ID/Shipping ID",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-11 16:30:26.421368",
+ "modified_by": "Administrator",
+ "module": "Medusa Connector",
+ "name": "Medusa Account Mapping",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

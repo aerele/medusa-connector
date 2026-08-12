@@ -12,6 +12,16 @@ frappe.ui.form.on("Medusa Settings", {
 		frm.set_query("erpnext_warehouse", "warehouse_mapping", () => ({
 			filters: { disabled: 0 },
 		}));
+		frm.set_query("erpnext_account", "tax_account_mapping", () => {
+			const tax_query = () => ({
+				filters: {
+					company: frm.doc.company,
+					account_type: ["in", ["Tax", "Chargeable", "Expense Account"]],
+					is_group: 0,
+				},
+			});
+			return tax_query();
+		});
 	},
 
 	enabled(frm) {
@@ -34,6 +44,25 @@ frappe.ui.form.on("Medusa Settings", {
 			freeze_message: __("Fetching stock locations from Medusa…"),
 			callback: () => {
 				frm.refresh_field("warehouse_mapping");
+				frm.dirty();
+			},
+		});
+	},
+
+	fetch_medusa_rates(frm) {
+		if (!frm.doc.enabled) {
+			frappe.msgprint(__("Enable the Medusa Connector first."));
+			return;
+		}
+
+		frm.call({
+			doc: frm.doc,
+			method: "fetch_medusa_rates",
+			freeze: true,
+			freeze_message: __("Fetching tax rates and shipping options from Medusa…"),
+			callback: () => {
+				frm.refresh_field("tax_account_mapping");
+				frm.refresh_field("shipping_mapping");
 				frm.dirty();
 			},
 		});
@@ -120,6 +149,39 @@ function toggle_buttons(frm) {
 	if (!frm.doc.enabled) {
 		return;
 	}
+
+	// —— Inventory ——
+	if (frm.doc.update_erpnext_stock_levels_to_medusa && has_enabled_warehouse_mapping(frm)) {
+		frm.add_custom_button(
+			__("Sync Inventory Now"),
+			() => {
+				frappe.call({
+					method: "medusa_connector.product.inventory_export.sync_inventory_now",
+					freeze: true,
+					freeze_message: __("Pushing ERPNext stock levels to Medusa…"),
+					callback: (r) => {
+						const m = r.message || {};
+						frm.reload_doc();
+						if (m.status === "Success") {
+							frappe.show_alert({ message: m.message, indicator: "green" });
+						} else if (m.status === "Busy" || m.status === "Skipped") {
+							frappe.show_alert({ message: m.message, indicator: "blue" });
+						} else if (m.status === "Partial Success") {
+							frappe.show_alert({ message: m.message, indicator: "orange" });
+						} else {
+							frappe.msgprint({
+								title: __("Inventory Sync"),
+								message: m.message || __("Inventory sync failed."),
+								indicator: "red",
+							});
+						}
+					},
+				});
+			},
+			__("Inventory")
+		);
+	}
+
 	const hasWebhookSecret = Boolean(frm.doc.webhook_secret);
 	frm.set_df_property(
 		"generate_secret_key",

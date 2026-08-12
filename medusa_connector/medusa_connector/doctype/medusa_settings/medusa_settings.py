@@ -30,6 +30,9 @@ class MedusaSettings(SettingController):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		from medusa_connector.medusa_connector.doctype.medusa_account_mapping.medusa_account_mapping import (
+			MedusaAccountMapping,
+		)
 		from medusa_connector.medusa_connector.doctype.medusa_warehouse_mapping.medusa_warehouse_mapping import (
 			MedusaWarehouseMapping,
 		)
@@ -45,6 +48,7 @@ class MedusaSettings(SettingController):
 		consolidate_taxes: DF.Check
 		cost_center: DF.Link | None
 		customer_group: DF.Link | None
+		damaged_return_warehouse: DF.Link | None
 		default_currency: DF.Data | None
 		default_customer: DF.Link | None
 		default_location_id: DF.Data | None
@@ -70,6 +74,7 @@ class MedusaSettings(SettingController):
 		old_orders_from: DF.Datetime | None
 		old_orders_to: DF.Datetime | None
 		price_list: DF.Link | None
+		return_warehouse: DF.Link | None
 		sales_invoice_series: DF.Literal[None]
 		sales_order_series: DF.Literal[None]
 		shipping_item: DF.Link | None
@@ -77,6 +82,7 @@ class MedusaSettings(SettingController):
 		sync_new_item_as_published: DF.Check
 		sync_old_orders: DF.Check
 		sync_sales_invoice: DF.Check
+		tax_account_mapping: DF.Table[MedusaAccountMapping]
 		update_erpnext_stock_levels_to_medusa: DF.Check
 		upload_erpnext_items: DF.Check
 		upload_variants_as_items: DF.Check
@@ -206,6 +212,103 @@ class MedusaSettings(SettingController):
 			_(
 				"Loaded {0} Medusa stock location(s). Map each location to an ERPNext warehouse and save."
 			).format(len(self.warehouse_mapping)),
+			indicator="green",
+			alert=True,
+		)
+
+	@frappe.whitelist()
+	def fetch_medusa_rates(self):
+		self.fetch_medusa_tax_rates()
+		self.fetch_medusa_shipping_options()
+
+	def fetch_medusa_tax_rates(self) -> None:
+		"""Load Medusa tax rates into the tax account mapping table."""
+		if not self.enabled:
+			frappe.throw(_("Please enable the Medusa Connector first."), title=_("Medusa Connector"))
+
+		try:
+			from medusa_connector.medusa.client import MedusaClient
+
+			tax_rates = _list_all_tax_rates(MedusaClient(settings=self))
+		except Exception as exc:
+			_throw_medusa_api_error(exc)
+
+		if not tax_rates:
+			frappe.msgprint(_("No tax rates were found in Medusa."), indicator="orange")
+			return
+
+		existing_tax_accounts = {
+			row.medusa_tax_or_shipping_id: row.erpnext_account
+			for row in self.tax_account_mapping or []
+			if row.medusa_tax_or_shipping_id
+		}
+
+		self.set("tax_account_mapping", [])
+		for rate in tax_rates:
+			rate_id = rate.get("id") or ""
+			if not rate_id:
+				continue
+			self.append(
+				"tax_account_mapping",
+				{
+					"medusa_tax_or_shipping_id": rate_id,
+					"tax_name": rate.get("name") or rate.get("code") or rate_id,
+					"tax_code": rate.get("code") or "",
+					"tax_rate": _parse_tax_rate(rate.get("rate") or 0),
+					"erpnext_account": existing_tax_accounts.get(rate_id) or "",
+				},
+			)
+
+		frappe.msgprint(
+			_("Loaded {0} Medusa tax rate(s). Map each rate to an ERPNext account and save.").format(
+				len(self.tax_account_mapping)
+			),
+			indicator="green",
+			alert=True,
+		)
+
+	def fetch_medusa_shipping_options(self) -> None:
+		"""Load Medusa shipping options into the tax account mapping table."""
+		if not self.enabled:
+			frappe.throw(_("Please enable the Medusa Connector first."), title=_("Medusa Connector"))
+
+		try:
+			from medusa_connector.medusa.client import MedusaClient
+
+			shipping_options = _list_all_shipping_options(MedusaClient(settings=self))
+		except Exception as exc:
+			_throw_medusa_api_error(exc)
+
+		if not shipping_options:
+			frappe.msgprint(_("No shipping options were found in Medusa."), indicator="orange")
+			return
+
+		existing_accounts = {
+			row.medusa_tax_or_shipping_id: row.erpnext_account
+			for row in self.tax_account_mapping or []
+			if row.medusa_tax_or_shipping_id
+		}
+
+		for option in shipping_options:
+			option_id = option.get("id") or ""
+			if not option_id:
+				continue
+
+			self.append(
+				"tax_account_mapping",
+				{
+					"medusa_tax_or_shipping_id": option_id,
+					"tax_name": option.get("name") or option_id,
+					"tax_code": "",
+					"tax_rate": 0,
+					"erpnext_account": existing_accounts.get(option_id) or "",
+				},
+			)
+
+		frappe.msgprint(
+			_("Loaded {0} Medusa shipping option(s). Map each option to an ERPNext account and save.").format(
+				len(shipping_options)
+			),
 			indicator="green",
 			alert=True,
 		)
@@ -398,6 +501,55 @@ def _list_all_stock_locations(client) -> list[dict]:
 		if not page or count is None or offset >= count:
 			break
 	return locations
+
+
+def _list_all_tax_rates(client) -> list[dict]:
+	"""Paginate Medusa tax rates."""
+	tax_rates: list[dict] = []
+	offset, limit = 0, DEFAULT_PAGE_LIMIT
+	while True:
+		resp = client.execute_rest("GET", "/admin/tax-rates", params={"limit": limit, "offset": offset})
+		page = (resp or {}).get("tax_rates") or []
+		tax_rates.extend(page)
+		count = (resp or {}).get("count")
+		offset += limit
+		if not page or count is None or offset >= count:
+			break
+	return tax_rates
+
+
+def _parse_tax_rate(rate: float) -> float:
+	"""Parse tax rate from Medusa format. Returns rate as percentage."""
+	from frappe.utils import flt
+
+	rate = flt(rate)
+	# If rate is less than 1, it's probably stored as decimal (0.18 = 18%)
+	# If rate is 1 or greater, it's probably already a percentage (18 = 18%)
+	return rate * 100 if rate and rate < 1 else rate
+
+
+def _list_all_shipping_options(client) -> list[dict]:
+	"""Paginate Medusa shipping options."""
+	shipping_options: list[dict] = []
+	offset, limit = 0, DEFAULT_PAGE_LIMIT
+
+	while True:
+		resp = client.execute_rest(
+			"GET",
+			"/admin/shipping-options",
+			params={"limit": limit, "offset": offset},
+		)
+
+		page = (resp or {}).get("shipping_options") or []
+		shipping_options.extend(page)
+
+		count = (resp or {}).get("count")
+		offset += limit
+
+		if not page or count is None or offset >= count:
+			break
+
+	return shipping_options
 
 
 @frappe.whitelist()

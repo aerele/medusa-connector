@@ -1,10 +1,8 @@
-# Copyright (c) 2026, Aerele Technologies and contributors
-# For license information, please see license.txt
-
+# import frappe
 from frappe.model.document import Document
 
 
-class MedusaWarehouseMapping(Document):
+class MedusaAccountMapping(Document):
 	# begin: auto-generated types
 	# This code is auto-generated. Do not modify anything in this block.
 
@@ -13,14 +11,14 @@ class MedusaWarehouseMapping(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
-		enabled: DF.Check
-		erpnext_warehouse: DF.Link | None
-		medusa_location_id: DF.Data
-		medusa_location_name: DF.Data | None
+		erpnext_account: DF.Link
+		medusa_tax_or_shipping_id: DF.Data
 		parent: DF.Data
 		parentfield: DF.Data
 		parenttype: DF.Data
-		return_warehouse: DF.Link | None
+		tax_code: DF.Data | None
+		tax_name: DF.Data | None
+		tax_rate: DF.Float
 	# end: auto-generated types
 
 	pass
