@@ -153,8 +153,11 @@ doc_events = {
 # ---------------
 
 # scheduler_events = {
-
 # }
+
+# Desk page client scripts are loaded automatically from page/ folders.
+# Keep log retention configurable.
+
 
 # Desk page client scripts are loaded automatically from page/ folders.
 # Keep log retention configurable.

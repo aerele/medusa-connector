@@ -36,7 +36,7 @@ def receive() -> dict:
 				"headers": _safe_headers(headers),
 				"payload": _redact_raw(raw),
 			},
-			exception="Invalid webhook signature",
+			exception="Error webhook signature",
 			make_new=True,
 		)
 
