@@ -22,19 +22,29 @@ class MasterService:
 
 	def __init__(self, settings=None) -> None:
 		self.settings = settings or frappe.get_cached_doc(SETTING_DOCTYPE)
+		self._ensured_masters: set[tuple[str, str]] = set()
 
-	@staticmethod
-	def get_or_create(doctype: str, name: str, name_field: str, extra: dict | None = None) -> str | None:
-		"""Return an existing master record or create it if missing."""
+	def get_or_create(
+		self, doctype: str, name: str, name_field: str, extra: dict | None = None
+	) -> str | None:
+		"""Return an existing master record or create it if missing.
+
+		Resolved masters are memoized per instance so a bulk sync reusing one
+		MasterService does not re-query the same UOM / Brand / Item Group for
+		every product in the catalog.
+		"""
 		name = (name or "").strip()
 		if not name:
 			return None
-		if frappe.db.exists(doctype, name):
+		key = (doctype, name)
+		if key in self._ensured_masters or frappe.db.exists(doctype, name):
+			self._ensured_masters.add(key)
 			return name
 		doc = {"doctype": doctype, name_field: name}
 		if extra:
 			doc.update(extra)
 		frappe.get_doc(doc).insert()
+		self._ensured_masters.add(key)
 		return name
 
 	def ensure_stock_uom(self, uom: str | None) -> str:
