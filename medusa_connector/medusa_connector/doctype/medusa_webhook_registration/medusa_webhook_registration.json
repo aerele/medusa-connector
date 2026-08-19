@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "creation": "2026-07-09 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "medusa_event",
+  "registration_status",
+  "webhook_id",
+  "erp_endpoint",
+  "last_sync_time",
+  "last_error"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "medusa_event",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Medusa Event",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "default": "Pending",
+   "fieldname": "registration_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Registration Status",
+   "options": "Pending\nRegistered\nFailed\nRemoved\nSkipped",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "webhook_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Webhook ID",
+   "read_only": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "erp_endpoint",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "ERP Endpoint",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "last_sync_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Last Sync Time",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Medusa Connector",
+ "name": "Medusa Webhook Registration",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

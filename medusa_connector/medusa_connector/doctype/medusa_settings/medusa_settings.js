@@ -1,0 +1,190 @@
+// Copyright (c) 2026, Aerele and contributors
+// For license information, please see license.txt
+
+frappe.ui.form.on("Medusa Settings", {
+	refresh(frm) {
+		toggle_buttons(frm);
+		setup_order_queries(frm);
+		load_naming_series(frm);
+		frm.set_query("price_list", () => ({
+			filters: { selling: 1 },
+		}));
+		frm.set_query("erpnext_warehouse", "warehouse_mapping", () => ({
+			filters: { disabled: 0 },
+		}));
+	},
+
+	enabled(frm) {
+		toggle_buttons(frm);
+	},
+
+	update_erpnext_stock_levels_to_medusa(frm) {
+		toggle_buttons(frm);
+	},
+
+	fetch_medusa_locations(frm) {
+		if (!frm.doc.enabled) {
+			frappe.msgprint(__("Enable the Medusa Connector first."));
+			return;
+		}
+		frm.call({
+			doc: frm.doc,
+			method: "fetch_medusa_locations",
+			freeze: true,
+			freeze_message: __("Fetching stock locations from Medusa…"),
+			callback: () => {
+				frm.refresh_field("warehouse_mapping");
+				frm.dirty();
+			},
+		});
+	},
+	generate_secret_key(frm) {
+		const hasWebhookSecret = Boolean(frm.doc.webhook_secret);
+
+		const message = hasWebhookSecret
+			? __(
+					"Warning: This will generate a new webhook secret and clear the current webhook registrations. You must click 'Sync Webhooks' afterward to complete the setup. Do you want to continue?"
+			  )
+			: __("Generate a webhook secret for secure webhook authentication?");
+
+		frappe.confirm(message, () => {
+			frm.call({
+				method: "regenerate_webhook_secret",
+				callback: (r) => {
+					if (!r.message) {
+						return;
+					}
+
+					frappe.msgprint({
+						title: __("Webhook Secret Generated"),
+						indicator: "green",
+						message: `
+						<p>${__("Copy this secret and configure it in your Medusa environment as:")}</p>
+
+						<pre>ERPNEXT_WEBHOOK_SIGNING_SECRET=${frappe.utils.escape_html(r.message)}</pre>
+
+						<p><b>${__("Important:")}</b> ${__("This secret will not be shown again. Store it securely.")}</p>
+
+						<p>${__("After configuring the secret in Medusa, restart Medusa and click 'Sync Webhooks'.")}</p>
+					`,
+					});
+
+					frm.reload_doc();
+				},
+			});
+		});
+	},
+
+	sync_webhooks(frm) {
+		frm.call({
+			method: "sync_webhooks",
+			freeze: true,
+			freeze_message: __("Syncing webhooks with Medusa…"),
+			callback: (r) => {
+				const m = r.message || {};
+				frm.reload_doc();
+
+				if (m.status === "Installed") {
+					frappe.show_alert({
+						message: m.message,
+						indicator: "green",
+					});
+				} else if (m.status === "Busy") {
+					frappe.show_alert({
+						message: m.message,
+						indicator: "blue",
+					});
+				} else if (m.status === "Not Installed") {
+					frappe.msgprint({
+						title: __("Medusa Webhooks Plugin Not Installed"),
+						message: m.instructions || m.message,
+						indicator: "orange",
+					});
+				} else {
+					frappe.msgprint({
+						title: __("Webhook Sync Failed"),
+						message:
+							(m.instructions ? m.instructions + "<hr>" : "") +
+							(m.message || __("Unknown error")),
+						indicator: "red",
+					});
+				}
+			},
+		});
+	},
+});
+
+function toggle_buttons(frm) {
+	frm.remove_custom_button(__("Sync Inventory Now"));
+
+	if (!frm.doc.enabled) {
+		return;
+	}
+	const hasWebhookSecret = Boolean(frm.doc.webhook_secret);
+	frm.set_df_property(
+		"generate_secret_key",
+		"label",
+		__(hasWebhookSecret ? "Regenerate Webhook Secret" : "Generate Webhook Secret")
+	);
+	frm.refresh_field("generate_secret_key");
+}
+
+function has_enabled_warehouse_mapping(frm) {
+	const rows = frm.doc.warehouse_mapping || [];
+	return rows.some((r) => r.enabled && r.erpnext_warehouse && r.medusa_location_id);
+}
+
+function setup_order_queries(frm) {
+	frm.set_query("cost_center", () => ({
+		filters: {
+			company: frm.doc.company,
+			is_group: 0,
+		},
+	}));
+	frm.set_query("cash_bank_account", () => ({
+		filters: {
+			company: frm.doc.company,
+			account_type: ["in", ["Cash", "Bank"]],
+			is_group: 0,
+		},
+	}));
+	const tax_query = () => ({
+		filters: {
+			company: frm.doc.company,
+			account_type: ["in", ["Tax", "Chargeable", "Expense Account"]],
+			is_group: 0,
+		},
+	});
+	frm.set_query("default_sales_tax_account", tax_query);
+	frm.set_query("default_shipping_charges_account", tax_query);
+	frm.set_query("shipping_item", () => ({
+		filters: { is_sales_item: 1, disabled: 0 },
+	}));
+}
+
+function load_naming_series(frm) {
+	if (!frm.doc.enabled) {
+		return;
+	}
+	frappe.call({
+		method: "ecommerce_core.utils.naming_series.get_series",
+		callback(r) {
+			if (!r.message) {
+				return;
+			}
+			const set_opts = (field, key) => {
+				const opts = r.message[key];
+				if (opts) {
+					frm.set_df_property(
+						field,
+						"options",
+						opts.split("\n").filter(Boolean).join("\n")
+					);
+				}
+			};
+			set_opts("sales_order_series", "sales_order_series");
+			set_opts("sales_invoice_series", "sales_invoice_series");
+			set_opts("delivery_note_series", "delivery_note_series");
+		},
+	});
+}
