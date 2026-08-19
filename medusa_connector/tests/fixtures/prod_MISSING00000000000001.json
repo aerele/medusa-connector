@@ -1,0 +1,141 @@
+{
+    "id": "prod_MISSING00000000000001",
+    "title": "Missing Product",
+    "subtitle": "",
+    "status": "published",
+    "external_id": null,
+    "description": "",
+    "handle": "missing-product",
+    "is_giftcard": false,
+    "discountable": true,
+    "thumbnail": null,
+    "collection_id": null,
+    "type_id": null,
+    "weight": null,
+    "length": null,
+    "height": null,
+    "width": null,
+    "hs_code": "999900",
+    "origin_country": null,
+    "mid_code": "",
+    "material": null,
+    "created_at": "2026-08-04T19:01:07.951Z",
+    "updated_at": "2026-08-04T19:01:22.624Z",
+    "deleted_at": null,
+    "metadata": null,
+    "type": null,
+    "collection": null,
+    "options": [
+        {
+            "id": "opt_01KZ72DA7AYVK7SWJA60ASSXXT",
+            "title": "Default option",
+            "is_exclusive": true,
+            "metadata": null,
+            "created_at": "2026-08-04T19:01:07.952Z",
+            "updated_at": "2026-08-04T19:01:07.952Z",
+            "deleted_at": null,
+            "values": [
+                {
+                    "id": "optval_01KZ72DA7DTX4G24W0WZSXZ42M",
+                    "value": "Default option value",
+                    "rank": null,
+                    "metadata": null,
+                    "option_id": "opt_01KZ72DA7AYVK7SWJA60ASSXXT",
+                    "created_at": "2026-08-04T19:01:07.952Z",
+                    "updated_at": "2026-08-04T19:01:07.952Z",
+                    "deleted_at": null
+                }
+            ]
+        }
+    ],
+    "tags": [],
+    "images": [],
+    "variants": [
+        {
+            "id": "variant_MISSING00000000000001",
+            "title": "Default variant",
+            "sku": "MISSING-SKU-001",
+            "barcode": null,
+            "ean": null,
+            "upc": null,
+            "allow_backorder": false,
+            "manage_inventory": true,
+            "hs_code": null,
+            "origin_country": null,
+            "mid_code": null,
+            "material": null,
+            "weight": null,
+            "length": null,
+            "height": null,
+            "width": null,
+            "metadata": null,
+            "variant_rank": 0,
+            "thumbnail": null,
+            "product_id": "prod_MISSING00000000000001",
+            "created_at": "2026-08-04T19:01:08.070Z",
+            "updated_at": "2026-08-04T19:01:08.070Z",
+            "deleted_at": null,
+            "images": [],
+            "options": [
+                {
+                    "id": "optval_01KZ72DA7DTX4G24W0WZSXZ42M",
+                    "value": "Default option value",
+                    "rank": null,
+                    "metadata": null,
+                    "option_id": "opt_01KZ72DA7AYVK7SWJA60ASSXXT",
+                    "option": {
+                        "id": "opt_01KZ72DA7AYVK7SWJA60ASSXXT",
+                        "title": "Default option",
+                        "is_exclusive": true,
+                        "metadata": null,
+                        "created_at": "2026-08-04T19:01:07.952Z",
+                        "updated_at": "2026-08-04T19:01:07.952Z",
+                        "deleted_at": null
+                    },
+                    "created_at": "2026-08-04T19:01:07.952Z",
+                    "updated_at": "2026-08-04T19:01:07.952Z",
+                    "deleted_at": null
+                }
+            ],
+            "prices": [
+                {
+                    "id": "price_01KZ72DACS9S8DBBRT4FES7WPH",
+                    "amount": 130,
+                    "currency_code": "inr",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_MISSING00000000000001",
+                    "created_at": "2026-08-04T19:01:08.123Z",
+                    "updated_at": "2026-08-04T19:01:08.123Z",
+                    "rules": {
+                        "region_id": "reg_01KXGWGXCQVMHH063D55FHE5X4"
+                    }
+                },
+                {
+                    "id": "price_01KZ72DACP38F9FV6QG7J101GC",
+                    "amount": 50,
+                    "currency_code": "inr",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_MISSING00000000000001",
+                    "created_at": "2026-08-04T19:01:08.122Z",
+                    "updated_at": "2026-08-04T19:01:08.122Z",
+                    "rules": {}
+                }
+            ]
+        }
+    ],
+    "categories": [],
+    "sales_channels": [
+        {
+            "id": "sc_01KX0SJVMVA470W1G4NPS9HY5M",
+            "name": "Default Sales Channel",
+            "description": "Created by Medusa",
+            "is_disabled": false,
+            "metadata": null,
+            "created_at": "2026-07-08T12:00:02.203Z",
+            "updated_at": "2026-08-04T12:00:02.203Z",
+            "deleted_at": null
+        }
+    ]
+}

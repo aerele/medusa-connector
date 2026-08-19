@@ -1,0 +1,839 @@
+{
+ "id": "order_01KZ3GWN7NNKE8A2S25RJZVP19",
+ "display_id": 58,
+ "custom_display_id": null,
+ "status": "pending",
+ "version": 4,
+ "summary": {
+  "paid_total": 661,
+  "raw_paid_total": {
+   "value": "661",
+   "precision": 20
+  },
+  "refunded_total": 0,
+  "accounting_total": 661,
+  "credit_line_total": 0,
+  "transaction_total": 661,
+  "pending_difference": 0,
+  "raw_refunded_total": {
+   "value": "0",
+   "precision": 20
+  },
+  "current_order_total": 661,
+  "original_order_total": 661,
+  "raw_accounting_total": {
+   "value": "661",
+   "precision": 20
+  },
+  "raw_credit_line_total": {
+   "value": "0",
+   "precision": 20
+  },
+  "raw_transaction_total": {
+   "value": "661",
+   "precision": 20
+  },
+  "raw_pending_difference": {
+   "value": "0",
+   "precision": 20
+  },
+  "raw_current_order_total": {
+   "value": "661",
+   "precision": 20
+  },
+  "raw_original_order_total": {
+   "value": "661",
+   "precision": 20
+  }
+ },
+ "total": 661,
+ "metadata": null,
+ "locale": null,
+ "created_at": "2026-08-03T09:57:13.077Z",
+ "updated_at": "2026-08-03T10:30:16.144Z",
+ "region_id": "reg_01KXGWGXCQVMHH063D55FHE5X4",
+ "subtotal": 661,
+ "tax_total": 0,
+ "discount_total": 0,
+ "discount_tax_total": 0,
+ "original_total": 661,
+ "original_subtotal": 661,
+ "original_tax_total": 0,
+ "item_total": 650,
+ "item_subtotal": 650,
+ "item_tax_total": 0,
+ "original_item_total": 650,
+ "original_item_subtotal": 650,
+ "original_item_tax_total": 0,
+ "shipping_total": 11,
+ "shipping_subtotal": 11,
+ "shipping_tax_total": 0,
+ "original_shipping_tax_total": 0,
+ "original_shipping_subtotal": 11,
+ "original_shipping_total": 11,
+ "credit_line_total": 0,
+ "credit_line_subtotal": 0,
+ "credit_line_tax_total": 0,
+ "currency_code": "inr",
+ "email": "dev@mai.in",
+ "customer_id": "cus_01KX0SZQ190GSNC3E7BZSRMYAQ",
+ "items": [
+  {
+   "id": "ordli_01KZ3HDFEKPAAN4887W9B75HNB",
+   "title": "Helmat",
+   "subtitle": "Black",
+   "thumbnail": null,
+   "variant_id": "variant_01KZ3GPJ8DQJWZFTCJVGSECM61",
+   "product_id": "prod_01KZ3GPJ5PWY1E5549RFVFGA5N",
+   "product_title": "Helmat",
+   "product_description": "",
+   "product_subtitle": "",
+   "product_type": "Sneakers",
+   "product_type_id": "ptyp_01KY9N4CTNTJMNGT2WBQEVQZ85",
+   "product_collection": "Apple Products",
+   "product_handle": "helmat",
+   "variant_sku": "HEL-BLACk-01",
+   "variant_barcode": null,
+   "variant_title": "Black",
+   "variant_option_values": null,
+   "requires_shipping": true,
+   "is_giftcard": false,
+   "is_discountable": true,
+   "is_tax_inclusive": false,
+   "is_custom_price": false,
+   "metadata": {},
+   "raw_compare_at_unit_price": null,
+   "raw_unit_price": {
+    "value": "210",
+    "precision": 20
+   },
+   "created_at": "2026-08-03T10:06:24.212Z",
+   "updated_at": "2026-08-03T10:06:24.212Z",
+   "deleted_at": null,
+   "tax_lines": [],
+   "adjustments": [],
+   "compare_at_unit_price": null,
+   "unit_price": 210,
+   "quantity": 1,
+   "raw_quantity": {
+    "value": "1",
+    "precision": 20
+   },
+   "line_item_metadata": {},
+   "detail": {
+    "id": "orditem_01KZ3JS5TA3W0PBSXJ6F8F9BJJ",
+    "version": 4,
+    "metadata": null,
+    "order_id": "order_01KZ3GWN7NNKE8A2S25RJZVP19",
+    "raw_unit_price": {
+     "value": "210",
+     "precision": 20
+    },
+    "raw_compare_at_unit_price": null,
+    "raw_quantity": {
+     "value": "1",
+     "precision": 20
+    },
+    "raw_fulfilled_quantity": {
+     "value": "1",
+     "precision": 20
+    },
+    "raw_delivered_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_shipped_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_requested_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_received_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_dismissed_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_written_off_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "created_at": "2026-08-03T10:30:16.144Z",
+    "updated_at": "2026-08-03T10:30:16.144Z",
+    "deleted_at": null,
+    "item_id": "ordli_01KZ3HDFEKPAAN4887W9B75HNB",
+    "unit_price": 210,
+    "compare_at_unit_price": null,
+    "quantity": 1,
+    "fulfilled_quantity": 1,
+    "delivered_quantity": 0,
+    "shipped_quantity": 0,
+    "return_requested_quantity": 0,
+    "return_received_quantity": 0,
+    "return_dismissed_quantity": 0,
+    "written_off_quantity": 0
+   },
+   "subtotal": 210,
+   "total": 210,
+   "original_subtotal": 210,
+   "original_total": 210,
+   "discount_subtotal": 0,
+   "discount_tax_total": 0,
+   "discount_total": 0,
+   "tax_total": 0,
+   "original_tax_total": 0,
+   "refundable_total_per_unit": 210,
+   "refundable_total": 210,
+   "fulfilled_total": 210,
+   "shipped_total": 0,
+   "return_requested_total": 0,
+   "return_received_total": 0,
+   "return_dismissed_total": 0,
+   "write_off_total": 0,
+   "raw_subtotal": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_total": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_original_subtotal": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_original_total": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_discount_subtotal": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_original_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_refundable_total_per_unit": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_refundable_total": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_fulfilled_total": {
+    "value": "210",
+    "precision": 20
+   },
+   "raw_shipped_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_requested_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_received_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_dismissed_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_write_off_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "variant": {
+    "id": "variant_01KZ3GPJ8DQJWZFTCJVGSECM61",
+    "title": "Black",
+    "sku": "HEL-BLACk-01",
+    "barcode": null,
+    "ean": null,
+    "upc": null,
+    "allow_backorder": true,
+    "manage_inventory": true,
+    "hs_code": null,
+    "origin_country": null,
+    "mid_code": null,
+    "material": null,
+    "weight": null,
+    "length": null,
+    "height": null,
+    "width": null,
+    "metadata": null,
+    "variant_rank": 0,
+    "thumbnail": null,
+    "product_id": "prod_01KZ3GPJ5PWY1E5549RFVFGA5N",
+    "product": {
+     "id": "prod_01KZ3GPJ5PWY1E5549RFVFGA5N",
+     "title": "Helmat",
+     "handle": "helmat",
+     "subtitle": "",
+     "description": "",
+     "is_giftcard": false,
+     "status": "published",
+     "thumbnail": null,
+     "weight": null,
+     "length": null,
+     "height": null,
+     "width": null,
+     "origin_country": null,
+     "hs_code": "999800",
+     "mid_code": "",
+     "material": null,
+     "discountable": true,
+     "external_id": null,
+     "metadata": null,
+     "type_id": "ptyp_01KY9N4CTNTJMNGT2WBQEVQZ85",
+     "type": {
+      "id": "ptyp_01KY9N4CTNTJMNGT2WBQEVQZ85"
+     },
+     "collection_id": "pcol_01KX5DK3D529XAWVQMD2WQ2R3G",
+     "collection": {
+      "id": "pcol_01KX5DK3D529XAWVQMD2WQ2R3G"
+     },
+     "created_at": "2026-08-03T09:53:53.342Z",
+     "updated_at": "2026-08-03T09:54:05.071Z",
+     "deleted_at": null
+    },
+    "created_at": "2026-08-03T09:53:53.422Z",
+    "updated_at": "2026-08-03T09:53:53.422Z",
+    "deleted_at": null
+   }
+  },
+  {
+   "id": "ordli_01KZ3HDFEM1202DZ71EPX82Y4E",
+   "title": "Helmat",
+   "subtitle": "White",
+   "thumbnail": null,
+   "variant_id": "variant_01KZ3GPJ8DZ8H7H1PBP37196XD",
+   "product_id": "prod_01KZ3GPJ5PWY1E5549RFVFGA5N",
+   "product_title": "Helmat",
+   "product_description": "",
+   "product_subtitle": "",
+   "product_type": "Sneakers",
+   "product_type_id": "ptyp_01KY9N4CTNTJMNGT2WBQEVQZ85",
+   "product_collection": "Apple Products",
+   "product_handle": "helmat",
+   "variant_sku": "HEL-WHITE-01",
+   "variant_barcode": null,
+   "variant_title": "White",
+   "variant_option_values": null,
+   "requires_shipping": true,
+   "is_giftcard": false,
+   "is_discountable": true,
+   "is_tax_inclusive": false,
+   "is_custom_price": false,
+   "metadata": {},
+   "raw_compare_at_unit_price": null,
+   "raw_unit_price": {
+    "value": "220",
+    "precision": 20
+   },
+   "created_at": "2026-08-03T10:06:24.212Z",
+   "updated_at": "2026-08-03T10:06:24.212Z",
+   "deleted_at": null,
+   "tax_lines": [],
+   "adjustments": [],
+   "compare_at_unit_price": null,
+   "unit_price": 220,
+   "quantity": 2,
+   "raw_quantity": {
+    "value": "2",
+    "precision": 20
+   },
+   "line_item_metadata": {},
+   "detail": {
+    "id": "orditem_01KZ3JS5TA2Q39QY8NNS7KJH0J",
+    "version": 4,
+    "metadata": null,
+    "order_id": "order_01KZ3GWN7NNKE8A2S25RJZVP19",
+    "raw_unit_price": {
+     "value": "220",
+     "precision": 20
+    },
+    "raw_compare_at_unit_price": null,
+    "raw_quantity": {
+     "value": "2",
+     "precision": 20
+    },
+    "raw_fulfilled_quantity": {
+     "value": "2",
+     "precision": 20
+    },
+    "raw_delivered_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_shipped_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_requested_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_received_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_dismissed_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_written_off_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "created_at": "2026-08-03T10:30:16.144Z",
+    "updated_at": "2026-08-03T10:30:16.144Z",
+    "deleted_at": null,
+    "item_id": "ordli_01KZ3HDFEM1202DZ71EPX82Y4E",
+    "unit_price": 220,
+    "compare_at_unit_price": null,
+    "quantity": 2,
+    "fulfilled_quantity": 2,
+    "delivered_quantity": 0,
+    "shipped_quantity": 0,
+    "return_requested_quantity": 0,
+    "return_received_quantity": 0,
+    "return_dismissed_quantity": 0,
+    "written_off_quantity": 0
+   },
+   "subtotal": 440,
+   "total": 440,
+   "original_subtotal": 440,
+   "original_total": 440,
+   "discount_subtotal": 0,
+   "discount_tax_total": 0,
+   "discount_total": 0,
+   "tax_total": 0,
+   "original_tax_total": 0,
+   "refundable_total_per_unit": 220,
+   "refundable_total": 440,
+   "fulfilled_total": 440,
+   "shipped_total": 0,
+   "return_requested_total": 0,
+   "return_received_total": 0,
+   "return_dismissed_total": 0,
+   "write_off_total": 0,
+   "raw_subtotal": {
+    "value": "440",
+    "precision": 20
+   },
+   "raw_total": {
+    "value": "440",
+    "precision": 20
+   },
+   "raw_original_subtotal": {
+    "value": "440",
+    "precision": 20
+   },
+   "raw_original_total": {
+    "value": "440",
+    "precision": 20
+   },
+   "raw_discount_subtotal": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_original_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_refundable_total_per_unit": {
+    "value": "220",
+    "precision": 20
+   },
+   "raw_refundable_total": {
+    "value": "440",
+    "precision": 20
+   },
+   "raw_fulfilled_total": {
+    "value": "440",
+    "precision": 20
+   },
+   "raw_shipped_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_requested_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_received_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_dismissed_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_write_off_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "variant": {
+    "id": "variant_01KZ3GPJ8DZ8H7H1PBP37196XD",
+    "title": "White",
+    "sku": "HEL-WHITE-01",
+    "barcode": null,
+    "ean": null,
+    "upc": null,
+    "allow_backorder": true,
+    "manage_inventory": true,
+    "hs_code": null,
+    "origin_country": null,
+    "mid_code": null,
+    "material": null,
+    "weight": null,
+    "length": null,
+    "height": null,
+    "width": null,
+    "metadata": null,
+    "variant_rank": 1,
+    "thumbnail": null,
+    "product_id": "prod_01KZ3GPJ5PWY1E5549RFVFGA5N",
+    "product": {
+     "id": "prod_01KZ3GPJ5PWY1E5549RFVFGA5N",
+     "title": "Helmat",
+     "handle": "helmat",
+     "subtitle": "",
+     "description": "",
+     "is_giftcard": false,
+     "status": "published",
+     "thumbnail": null,
+     "weight": null,
+     "length": null,
+     "height": null,
+     "width": null,
+     "origin_country": null,
+     "hs_code": "999800",
+     "mid_code": "",
+     "material": null,
+     "discountable": true,
+     "external_id": null,
+     "metadata": null,
+     "type_id": "ptyp_01KY9N4CTNTJMNGT2WBQEVQZ85",
+     "type": {
+      "id": "ptyp_01KY9N4CTNTJMNGT2WBQEVQZ85"
+     },
+     "collection_id": "pcol_01KX5DK3D529XAWVQMD2WQ2R3G",
+     "collection": {
+      "id": "pcol_01KX5DK3D529XAWVQMD2WQ2R3G"
+     },
+     "created_at": "2026-08-03T09:53:53.342Z",
+     "updated_at": "2026-08-03T09:54:05.071Z",
+     "deleted_at": null
+    },
+    "created_at": "2026-08-03T09:53:53.422Z",
+    "updated_at": "2026-08-03T09:53:53.422Z",
+    "deleted_at": null
+   }
+  }
+ ],
+ "credit_lines": [],
+ "shipping_address": {
+  "id": "ordaddr_01KZ3GWN7KZ40SRDSWM2K8FHFP",
+  "customer_id": null,
+  "company": "",
+  "first_name": "Dev",
+  "last_name": "Test",
+  "address_1": "27 Residency Road",
+  "address_2": "",
+  "city": "Coimbatore",
+  "country_code": "in",
+  "province": "Tamil Nadu",
+  "postal_code": "627401",
+  "phone": "",
+  "metadata": null,
+  "created_at": "2026-08-03T09:57:13.077Z",
+  "updated_at": "2026-08-03T09:57:13.077Z",
+  "deleted_at": null
+ },
+ "billing_address": {
+  "id": "ordaddr_01KZ3GWN7KDH7M32XKSR8J5Q3Z",
+  "customer_id": null,
+  "company": "",
+  "first_name": "Dev",
+  "last_name": "Test",
+  "address_1": "27 Residency Road",
+  "address_2": "",
+  "city": "Coimbatore",
+  "country_code": "in",
+  "province": "Tamil Nadu",
+  "postal_code": "627401",
+  "phone": "",
+  "metadata": null,
+  "created_at": "2026-08-03T09:57:13.077Z",
+  "updated_at": "2026-08-03T09:57:13.077Z",
+  "deleted_at": null
+ },
+ "shipping_methods": [
+  {
+   "id": "ordsm_01KZ3HFB0DKCKHH3M678H2WTFZ",
+   "name": "Standard Shipping",
+   "description": null,
+   "is_tax_inclusive": false,
+   "is_custom_amount": true,
+   "shipping_option_id": "so_01KX0SJVY8K2JB8C28WNMHASTM",
+   "data": {},
+   "metadata": null,
+   "raw_amount": {
+    "value": "11",
+    "precision": 20
+   },
+   "created_at": "2026-08-03T10:07:25.197Z",
+   "updated_at": "2026-08-03T10:07:25.197Z",
+   "deleted_at": null,
+   "tax_lines": [],
+   "adjustments": [],
+   "amount": 11,
+   "order_id": "order_01KZ3GWN7NNKE8A2S25RJZVP19",
+   "detail": {
+    "id": "ordspmv_01KZ3JS5TBVN859TNFBJV9XDJ5",
+    "version": 4,
+    "order_id": "order_01KZ3GWN7NNKE8A2S25RJZVP19",
+    "return_id": null,
+    "exchange_id": null,
+    "claim_id": null,
+    "created_at": "2026-08-03T10:07:25.197Z",
+    "updated_at": "2026-08-03T10:07:25.197Z",
+    "deleted_at": null,
+    "shipping_method_id": "ordsm_01KZ3HFB0DKCKHH3M678H2WTFZ"
+   },
+   "subtotal": 11,
+   "total": 11,
+   "original_subtotal": 11,
+   "original_total": 11,
+   "discount_total": 0,
+   "discount_subtotal": 0,
+   "discount_tax_total": 0,
+   "tax_total": 0,
+   "original_tax_total": 0,
+   "raw_subtotal": {
+    "value": "11",
+    "precision": 20
+   },
+   "raw_total": {
+    "value": "11",
+    "precision": 20
+   },
+   "raw_original_subtotal": {
+    "value": "11",
+    "precision": 20
+   },
+   "raw_original_total": {
+    "value": "11",
+    "precision": 20
+   },
+   "raw_discount_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_subtotal": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_original_tax_total": {
+    "value": "0",
+    "precision": 20
+   }
+  }
+ ],
+ "customer": {
+  "id": "cus_01KX0SZQ190GSNC3E7BZSRMYAQ",
+  "company_name": null,
+  "first_name": "Dev",
+  "last_name": "Test",
+  "email": "dev@mai.in",
+  "phone": "",
+  "has_account": true,
+  "metadata": null,
+  "created_by": null,
+  "created_at": "2026-07-08T12:07:03.465Z",
+  "updated_at": "2026-07-08T12:07:03.465Z",
+  "deleted_at": null
+ },
+ "payment_collections": [
+  {
+   "id": "pay_col_01KZ3HE1VCPZCPAXM3ETXVM45B",
+   "currency_code": "inr",
+   "completed_at": "2026-08-03T10:28:46.995Z",
+   "status": "completed",
+   "metadata": null,
+   "raw_amount": {
+    "value": "661",
+    "precision": 20
+   },
+   "raw_authorized_amount": {
+    "value": "661",
+    "precision": 20
+   },
+   "raw_captured_amount": {
+    "value": "661",
+    "precision": 20
+   },
+   "raw_refunded_amount": {
+    "value": "0",
+    "precision": 20
+   },
+   "created_at": "2026-08-03T10:06:43.052Z",
+   "updated_at": "2026-08-03T10:28:46.997Z",
+   "deleted_at": null,
+   "payments": [
+    {
+     "id": "pay_01KZ3JPEQ4C2Q6CFR1CWVCFMJ7",
+     "currency_code": "inr",
+     "provider_id": "pp_system_default",
+     "data": {},
+     "metadata": null,
+     "captured_at": "2026-08-03T10:28:46.983Z",
+     "canceled_at": null,
+     "payment_collection_id": "pay_col_01KZ3HE1VCPZCPAXM3ETXVM45B",
+     "payment_session": {
+      "id": "payses_01KZ3JPEPGFMA8KDFD3Q3FZ4MP"
+     },
+     "raw_amount": {
+      "value": "661",
+      "precision": 20
+     },
+     "created_at": "2026-08-03T10:28:46.949Z",
+     "updated_at": "2026-08-03T10:28:46.985Z",
+     "deleted_at": null,
+     "payment_session_id": "payses_01KZ3JPEPGFMA8KDFD3Q3FZ4MP",
+     "refunds": [],
+     "captures": [
+      {
+       "id": "capt_01KZ3JPER1AJP781T90N3W5CP1",
+       "payment_id": "pay_01KZ3JPEQ4C2Q6CFR1CWVCFMJ7",
+       "metadata": null,
+       "created_by": null,
+       "raw_amount": {
+        "value": "661",
+        "precision": 20
+       },
+       "created_at": "2026-08-03T10:28:46.977Z",
+       "updated_at": "2026-08-03T10:28:46.977Z",
+       "deleted_at": null,
+       "amount": 661
+      }
+     ],
+     "amount": 661
+    }
+   ],
+   "amount": 661,
+   "authorized_amount": 661,
+   "captured_amount": 661,
+   "refunded_amount": 0
+  }
+ ],
+ "fulfillments": [
+  {
+   "id": "ful_01KZ3JS5QE0GZN3BWXZX8HZ6QX",
+   "location_id": "sloc_01KX0SJVTCRHA8PC1QMCW1VP67",
+   "packed_at": "2026-08-03T10:30:16.035Z",
+   "shipped_at": null,
+   "marked_shipped_by": null,
+   "created_by": null,
+   "delivered_at": null,
+   "canceled_at": null,
+   "data": {},
+   "requires_shipping": true,
+   "provider": {
+    "id": "manual_manual"
+   },
+   "shipping_option_id": "so_01KX0SJVY8K2JB8C28WNMHASTM",
+   "shipping_option": {
+    "id": "so_01KX0SJVY8K2JB8C28WNMHASTM"
+   },
+   "delivery_address": {
+    "id": "fuladdr_01KZ3JS5QEHPCACP21GASPPE84"
+   },
+   "metadata": null,
+   "created_at": "2026-08-03T10:30:16.047Z",
+   "updated_at": "2026-08-03T10:30:16.047Z",
+   "deleted_at": null,
+   "items": [
+    {
+     "id": "fulit_01KZ3JS5QDVVQNBVHRNJPK6EWS",
+     "title": "Black",
+     "sku": "HEL-BLACk-01",
+     "barcode": "",
+     "line_item_id": "ordli_01KZ3HDFEKPAAN4887W9B75HNB",
+     "inventory_item_id": "iitem_01KZ3GPJ8Z5P2XE2NF98YD4KMS",
+     "fulfillment_id": "ful_01KZ3JS5QE0GZN3BWXZX8HZ6QX",
+     "raw_quantity": {
+      "value": "1",
+      "precision": 20
+     },
+     "created_at": "2026-08-03T10:30:16.047Z",
+     "updated_at": "2026-08-03T10:30:16.047Z",
+     "deleted_at": null,
+     "quantity": 1
+    },
+    {
+     "id": "fulit_01KZ3JS5QDPB609GATS0PPQEKZ",
+     "title": "White",
+     "sku": "HEL-WHITE-01",
+     "barcode": "",
+     "line_item_id": "ordli_01KZ3HDFEM1202DZ71EPX82Y4E",
+     "inventory_item_id": "iitem_01KZ3GPJ8ZH0V8KBFSDC6914DR",
+     "fulfillment_id": "ful_01KZ3JS5QE0GZN3BWXZX8HZ6QX",
+     "raw_quantity": {
+      "value": "2",
+      "precision": 20
+     },
+     "created_at": "2026-08-03T10:30:16.047Z",
+     "updated_at": "2026-08-03T10:30:16.047Z",
+     "deleted_at": null,
+     "quantity": 2
+    }
+   ],
+   "labels": [],
+   "provider_id": "manual_manual",
+   "delivery_address_id": "fuladdr_01KZ3JS5QEHPCACP21GASPPE84"
+  }
+ ],
+ "payment_status": "captured",
+ "fulfillment_status": "fulfilled"
+}

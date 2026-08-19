@@ -1,0 +1,581 @@
+{
+    "id": "order_01KZ6HHWB29C8QYGTQVH4TYJ7Y",
+    "display_id": 64,
+    "custom_display_id": null,
+    "status": "pending",
+    "version": 3,
+    "summary": {
+        "paid_total": 294.3,
+        "raw_paid_total": {
+            "value": "294.3",
+            "precision": 20
+        },
+        "refunded_total": 0,
+        "accounting_total": 294.3,
+        "credit_line_total": 0,
+        "transaction_total": 294.3,
+        "pending_difference": 0,
+        "raw_refunded_total": {
+            "value": "0",
+            "precision": 20
+        },
+        "current_order_total": 294.3,
+        "original_order_total": 233.26,
+        "raw_accounting_total": {
+            "value": "294.3",
+            "precision": 20
+        },
+        "raw_credit_line_total": {
+            "value": "0",
+            "precision": 20
+        },
+        "raw_transaction_total": {
+            "value": "294.3",
+            "precision": 20
+        },
+        "raw_pending_difference": {
+            "value": "0",
+            "precision": 20
+        },
+        "raw_current_order_total": {
+            "value": "294.3",
+            "precision": 20
+        },
+        "raw_original_order_total": {
+            "value": "233.26",
+            "precision": 20
+        }
+    },
+    "total": 294.3,
+    "metadata": null,
+    "locale": null,
+    "created_at": "2026-08-04T14:06:31.779Z",
+    "updated_at": "2026-08-04T14:06:56.867Z",
+    "region_id": "reg_01KXGWGXCQVMHH063D55FHE5X4",
+    "subtotal": 270,
+    "tax_total": 24.3,
+    "discount_total": 0,
+    "discount_tax_total": 0,
+    "original_total": 294.3,
+    "original_subtotal": 270,
+    "original_tax_total": 24.3,
+    "item_total": 233.26,
+    "item_subtotal": 214,
+    "item_tax_total": 19.26,
+    "original_item_total": 233.26,
+    "original_item_subtotal": 214,
+    "original_item_tax_total": 19.26,
+    "shipping_total": 61.04,
+    "shipping_subtotal": 56,
+    "shipping_tax_total": 5.04,
+    "original_shipping_tax_total": 5.04,
+    "original_shipping_subtotal": 56,
+    "original_shipping_total": 61.04,
+    "credit_line_total": 0,
+    "credit_line_subtotal": 0,
+    "credit_line_tax_total": 0,
+    "currency_code": "inr",
+    "email": "dev@mai.in",
+    "customer_id": "cus_01KX0SZQ190GSNC3E7BZSRMYAQ",
+    "items": [
+        {
+            "id": "ordli_01KZ6HJ76K2SS660XERY669AX3",
+            "title": "Pen",
+            "subtitle": "Default variant",
+            "thumbnail": null,
+            "variant_id": "variant_01KZ6H851HDZ8GFN9VK7NCGA8B",
+            "product_id": "prod_01KZ6H84YMYQ6SNSB8W86TMXHJ",
+            "product_title": "Pen",
+            "product_description": "",
+            "product_subtitle": "",
+            "product_type": null,
+            "product_type_id": null,
+            "product_collection": null,
+            "product_handle": "pen",
+            "variant_sku": null,
+            "variant_barcode": null,
+            "variant_title": "Default variant",
+            "variant_option_values": null,
+            "requires_shipping": true,
+            "is_giftcard": false,
+            "is_discountable": true,
+            "is_tax_inclusive": false,
+            "is_custom_price": false,
+            "metadata": {},
+            "raw_compare_at_unit_price": null,
+            "raw_unit_price": {
+                "value": "214",
+                "precision": 20
+            },
+            "created_at": "2026-08-04T14:06:42.899Z",
+            "updated_at": "2026-08-04T14:06:42.899Z",
+            "deleted_at": null,
+            "tax_lines": [
+                {
+                    "id": "ordlitxl_01KZ6HJ77EXN4MTW7ZZ81B36KR",
+                    "description": "CGST",
+                    "tax_rate_id": "txr_01KXD6JG0D96DC0NMW16ZYB6E3",
+                    "code": "TAX-1",
+                    "provider_id": "system",
+                    "item_id": "ordli_01KZ6HJ76K2SS660XERY669AX3",
+                    "raw_rate": {
+                        "value": "9",
+                        "precision": 20
+                    },
+                    "created_at": "2026-08-04T14:06:42.926Z",
+                    "updated_at": "2026-08-04T14:06:42.926Z",
+                    "deleted_at": null,
+                    "rate": 9,
+                    "total": 19.26,
+                    "subtotal": 19.26,
+                    "raw_total": {
+                        "value": "19.26",
+                        "precision": 20
+                    },
+                    "raw_subtotal": {
+                        "value": "19.26",
+                        "precision": 20
+                    }
+                }
+            ],
+            "adjustments": [],
+            "compare_at_unit_price": null,
+            "unit_price": 214,
+            "quantity": 1,
+            "raw_quantity": {
+                "value": "1",
+                "precision": 20
+            },
+            "line_item_metadata": {},
+            "detail": {
+                "id": "orditem_01KZ6HJHXEFSKC0ES5JK1JGFZ2",
+                "version": 3,
+                "metadata": null,
+                "order_id": "order_01KZ6HHWB29C8QYGTQVH4TYJ7Y",
+                "raw_unit_price": {
+                    "value": "214",
+                    "precision": 20
+                },
+                "raw_compare_at_unit_price": null,
+                "raw_quantity": {
+                    "value": "1",
+                    "precision": 20
+                },
+                "raw_fulfilled_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "raw_delivered_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "raw_shipped_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "raw_return_requested_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "raw_return_received_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "raw_return_dismissed_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "raw_written_off_quantity": {
+                    "value": "0",
+                    "precision": 20
+                },
+                "created_at": "2026-08-04T14:06:53.871Z",
+                "updated_at": "2026-08-04T14:06:53.871Z",
+                "deleted_at": null,
+                "item_id": "ordli_01KZ6HJ76K2SS660XERY669AX3",
+                "unit_price": 214,
+                "compare_at_unit_price": null,
+                "quantity": 1,
+                "fulfilled_quantity": 0,
+                "delivered_quantity": 0,
+                "shipped_quantity": 0,
+                "return_requested_quantity": 0,
+                "return_received_quantity": 0,
+                "return_dismissed_quantity": 0,
+                "written_off_quantity": 0
+            },
+            "subtotal": 214,
+            "total": 233.26,
+            "original_subtotal": 214,
+            "original_total": 233.26,
+            "discount_subtotal": 0,
+            "discount_tax_total": 0,
+            "discount_total": 0,
+            "tax_total": 19.26,
+            "original_tax_total": 19.26,
+            "refundable_total_per_unit": 233.26,
+            "refundable_total": 233.26,
+            "fulfilled_total": 0,
+            "shipped_total": 0,
+            "return_requested_total": 0,
+            "return_received_total": 0,
+            "return_dismissed_total": 0,
+            "write_off_total": 0,
+            "raw_subtotal": {
+                "value": "214",
+                "precision": 20
+            },
+            "raw_total": {
+                "value": "233.26",
+                "precision": 20
+            },
+            "raw_original_subtotal": {
+                "value": "214",
+                "precision": 20
+            },
+            "raw_original_total": {
+                "value": "233.26",
+                "precision": 20
+            },
+            "raw_discount_subtotal": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_discount_tax_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_discount_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_tax_total": {
+                "value": "19.26",
+                "precision": 20
+            },
+            "raw_original_tax_total": {
+                "value": "19.26",
+                "precision": 20
+            },
+            "raw_refundable_total_per_unit": {
+                "value": "233.26",
+                "precision": 20
+            },
+            "raw_refundable_total": {
+                "value": "233.26",
+                "precision": 20
+            },
+            "raw_fulfilled_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_shipped_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_return_requested_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_return_received_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_return_dismissed_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_write_off_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "variant": {
+                "id": "variant_01KZ6H851HDZ8GFN9VK7NCGA8B",
+                "title": "Default variant",
+                "sku": null,
+                "barcode": null,
+                "ean": null,
+                "upc": null,
+                "allow_backorder": false,
+                "manage_inventory": true,
+                "hs_code": null,
+                "origin_country": null,
+                "mid_code": null,
+                "material": null,
+                "weight": null,
+                "length": null,
+                "height": null,
+                "width": null,
+                "metadata": null,
+                "variant_rank": 0,
+                "thumbnail": null,
+                "product_id": "prod_01KZ6H84YMYQ6SNSB8W86TMXHJ",
+                "product": {
+                    "id": "prod_01KZ6H84YMYQ6SNSB8W86TMXHJ",
+                    "title": "Pen",
+                    "handle": "pen",
+                    "subtitle": "",
+                    "description": "",
+                    "is_giftcard": false,
+                    "status": "published",
+                    "thumbnail": null,
+                    "weight": null,
+                    "length": null,
+                    "height": null,
+                    "width": null,
+                    "origin_country": null,
+                    "hs_code": "010190",
+                    "mid_code": "",
+                    "material": null,
+                    "discountable": true,
+                    "external_id": null,
+                    "metadata": null,
+                    "type_id": null,
+                    "type": null,
+                    "collection_id": null,
+                    "collection": null,
+                    "created_at": "2026-08-04T14:01:12.922Z",
+                    "updated_at": "2026-08-04T14:01:19.529Z",
+                    "deleted_at": null
+                },
+                "created_at": "2026-08-04T14:01:13.009Z",
+                "updated_at": "2026-08-04T14:01:13.009Z",
+                "deleted_at": null
+            }
+        }
+    ],
+    "credit_lines": [],
+    "shipping_address": {
+        "id": "ordaddr_01KZ6HHWB2V4JT6JTCZC9WBR49",
+        "customer_id": null,
+        "company": "",
+        "first_name": "Dev",
+        "last_name": "Test",
+        "address_1": "wer",
+        "address_2": "",
+        "city": "Ambai",
+        "country_code": "in",
+        "province": "Tamil Nadu",
+        "postal_code": "627401",
+        "phone": "",
+        "metadata": null,
+        "created_at": "2026-08-04T14:06:31.779Z",
+        "updated_at": "2026-08-04T14:06:31.779Z",
+        "deleted_at": null
+    },
+    "billing_address": {
+        "id": "ordaddr_01KZ6HHWB22HCQRKK3EDMDG9PK",
+        "customer_id": null,
+        "company": "",
+        "first_name": "Dev",
+        "last_name": "Test",
+        "address_1": "wer",
+        "address_2": "",
+        "city": "Ambai",
+        "country_code": "in",
+        "province": "Tamil Nadu",
+        "postal_code": "627401",
+        "phone": "",
+        "metadata": null,
+        "created_at": "2026-08-04T14:06:31.779Z",
+        "updated_at": "2026-08-04T14:06:31.779Z",
+        "deleted_at": null
+    },
+    "shipping_methods": [
+        {
+            "id": "ordsm_01KZ6HJGY0HBA59MQG2FCCK0GB",
+            "name": "Standard Shipping",
+            "description": null,
+            "is_tax_inclusive": false,
+            "is_custom_amount": true,
+            "shipping_option_id": "so_01KX0SJVY8K2JB8C28WNMHASTM",
+            "data": {},
+            "metadata": null,
+            "raw_amount": {
+                "value": "56",
+                "precision": 20
+            },
+            "created_at": "2026-08-04T14:06:52.864Z",
+            "updated_at": "2026-08-04T14:06:52.864Z",
+            "deleted_at": null,
+            "tax_lines": [
+                {
+                    "id": "ordsmtxl_01KZ6HJGZDDQ75HAE4R7R3EDPG",
+                    "description": "CGST",
+                    "tax_rate_id": "txr_01KXD6JG0D96DC0NMW16ZYB6E3",
+                    "code": "TAX-1",
+                    "provider_id": "system",
+                    "shipping_method_id": "ordsm_01KZ6HJGY0HBA59MQG2FCCK0GB",
+                    "raw_rate": {
+                        "value": "9",
+                        "precision": 20
+                    },
+                    "created_at": "2026-08-04T14:06:52.909Z",
+                    "updated_at": "2026-08-04T14:06:52.909Z",
+                    "deleted_at": null,
+                    "rate": 9,
+                    "total": 5.04,
+                    "subtotal": 5.04,
+                    "raw_total": {
+                        "value": "5.04",
+                        "precision": 20
+                    },
+                    "raw_subtotal": {
+                        "value": "5.04",
+                        "precision": 20
+                    }
+                }
+            ],
+            "adjustments": [],
+            "amount": 56,
+            "order_id": "order_01KZ6HHWB29C8QYGTQVH4TYJ7Y",
+            "detail": {
+                "id": "ordspmv_01KZ6HJGY0Q5FX5N9QQG52N1Q6",
+                "version": 3,
+                "order_id": "order_01KZ6HHWB29C8QYGTQVH4TYJ7Y",
+                "return_id": null,
+                "exchange_id": null,
+                "claim_id": null,
+                "created_at": "2026-08-04T14:06:52.864Z",
+                "updated_at": "2026-08-04T14:06:52.864Z",
+                "deleted_at": null,
+                "shipping_method_id": "ordsm_01KZ6HJGY0HBA59MQG2FCCK0GB"
+            },
+            "subtotal": 56,
+            "total": 61.04,
+            "original_subtotal": 56,
+            "original_total": 61.04,
+            "discount_total": 0,
+            "discount_subtotal": 0,
+            "discount_tax_total": 0,
+            "tax_total": 5.04,
+            "original_tax_total": 5.04,
+            "raw_subtotal": {
+                "value": "56",
+                "precision": 20
+            },
+            "raw_total": {
+                "value": "61.04",
+                "precision": 20
+            },
+            "raw_original_subtotal": {
+                "value": "56",
+                "precision": 20
+            },
+            "raw_original_total": {
+                "value": "61.04",
+                "precision": 20
+            },
+            "raw_discount_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_discount_subtotal": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_discount_tax_total": {
+                "value": "0",
+                "precision": 20
+            },
+            "raw_tax_total": {
+                "value": "5.04",
+                "precision": 20
+            },
+            "raw_original_tax_total": {
+                "value": "5.04",
+                "precision": 20
+            }
+        }
+    ],
+    "customer": {
+        "id": "cus_01KX0SZQ190GSNC3E7BZSRMYAQ",
+        "company_name": null,
+        "first_name": "Dev",
+        "last_name": "Test",
+        "email": "dev@mai.in",
+        "phone": "",
+        "has_account": true,
+        "metadata": null,
+        "created_by": null,
+        "created_at": "2026-07-08T12:07:03.465Z",
+        "updated_at": "2026-07-08T12:07:03.465Z",
+        "deleted_at": null
+    },
+    "payment_collections": [
+        {
+            "id": "pay_col_01KZ6HJ8BPA29D4DX8ENNA2DSA",
+            "currency_code": "inr",
+            "completed_at": "2026-08-04T14:11:01.774Z",
+            "status": "completed",
+            "metadata": null,
+            "raw_amount": {
+                "value": "294.3",
+                "precision": 20
+            },
+            "raw_authorized_amount": {
+                "value": "294.3",
+                "precision": 20
+            },
+            "raw_captured_amount": {
+                "value": "294.3",
+                "precision": 20
+            },
+            "raw_refunded_amount": {
+                "value": "0",
+                "precision": 20
+            },
+            "created_at": "2026-08-04T14:06:44.086Z",
+            "updated_at": "2026-08-04T14:11:01.776Z",
+            "deleted_at": null,
+            "payments": [
+                {
+                    "id": "pay_01KZ6HT3ZAJES4QYDKVT35XC3W",
+                    "currency_code": "inr",
+                    "provider_id": "pp_system_default",
+                    "data": {},
+                    "metadata": null,
+                    "captured_at": "2026-08-04T14:11:01.764Z",
+                    "canceled_at": null,
+                    "payment_collection_id": "pay_col_01KZ6HJ8BPA29D4DX8ENNA2DSA",
+                    "payment_session": {
+                        "id": "payses_01KZ6HT3YYPJTSHSD7HHDSM93B"
+                    },
+                    "raw_amount": {
+                        "value": "294.3",
+                        "precision": 20
+                    },
+                    "created_at": "2026-08-04T14:11:01.738Z",
+                    "updated_at": "2026-08-04T14:11:01.766Z",
+                    "deleted_at": null,
+                    "payment_session_id": "payses_01KZ6HT3YYPJTSHSD7HHDSM93B",
+                    "refunds": [],
+                    "captures": [
+                        {
+                            "id": "capt_01KZ6HT401ZGGJWMQXP1DXHP4B",
+                            "payment_id": "pay_01KZ6HT3ZAJES4QYDKVT35XC3W",
+                            "metadata": null,
+                            "created_by": null,
+                            "raw_amount": {
+                                "value": "294.3",
+                                "precision": 20
+                            },
+                            "created_at": "2026-08-04T14:11:01.761Z",
+                            "updated_at": "2026-08-04T14:11:01.761Z",
+                            "deleted_at": null,
+                            "amount": 294.3
+                        }
+                    ],
+                    "amount": 294.3
+                }
+            ],
+            "amount": 294.3,
+            "authorized_amount": 294.3,
+            "captured_amount": 294.3,
+            "refunded_amount": 0
+        }
+    ],
+    "fulfillments": [],
+    "payment_status": "captured",
+    "fulfillment_status": "not_fulfilled"
+}

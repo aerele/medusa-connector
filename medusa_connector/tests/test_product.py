@@ -148,6 +148,7 @@ class TestProductSync(TestCase):
 				"description",
 				"item_group",
 				"weight_per_unit",
+				"standard_rate",
 			],
 			as_dict=True,
 		)
@@ -159,6 +160,11 @@ class TestProductSync(TestCase):
 		self.assertEqual(item.item_code, primary_variant["sku"])
 		self.assertEqual(item.item_group, product["categories"][0]["name"])
 		self.assertEqual(flt(item.weight_per_unit), flt(primary_variant["weight"]))
+
+		usd_price = next(
+			price["amount"] for price in primary_variant["prices"] if price["currency_code"] == "usd"
+		)
+		self.assertEqual(flt(item.standard_rate), flt(usd_price))
 
 	def test_sync_missing_product(self):
 		"""A missing Medusa product fails the sync and creates no mapping."""

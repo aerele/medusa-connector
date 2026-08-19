@@ -1,0 +1,200 @@
+{
+    "id": "prod_01KZ37YA6B4XGZ7G7MV3AP382D",
+    "title": "test order item 1",
+    "subtitle": "Brown",
+    "status": "published",
+    "external_id": null,
+    "description": "we",
+    "handle": "test-order-item-1",
+    "is_giftcard": false,
+    "discountable": true,
+    "thumbnail": null,
+    "collection_id": null,
+    "type_id": null,
+    "weight": null,
+    "length": null,
+    "height": null,
+    "width": null,
+    "hs_code": "999800",
+    "origin_country": null,
+    "mid_code": "",
+    "material": null,
+    "created_at": "2026-08-03T07:20:50.128Z",
+    "updated_at": "2026-08-03T07:24:49.662Z",
+    "deleted_at": null,
+    "metadata": null,
+    "type": null,
+    "collection": null,
+    "options": [
+        {
+            "id": "opt_01KZ37YA6C53ACM4PSM3CX0S81",
+            "title": "Default option",
+            "is_exclusive": true,
+            "metadata": null,
+            "created_at": "2026-08-03T07:20:50.128Z",
+            "updated_at": "2026-08-03T07:20:50.128Z",
+            "deleted_at": null,
+            "values": [
+                {
+                    "id": "optval_01KZ37YA6FT8N6V90BRBJB5W3Q",
+                    "value": "Default option value",
+                    "rank": null,
+                    "metadata": null,
+                    "option_id": "opt_01KZ37YA6C53ACM4PSM3CX0S81",
+                    "created_at": "2026-08-03T07:20:50.128Z",
+                    "updated_at": "2026-08-03T07:20:50.128Z",
+                    "deleted_at": null
+                }
+            ]
+        }
+    ],
+    "tags": [],
+    "images": [],
+    "variants": [
+        {
+            "id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+            "title": "Default variant",
+            "sku": "TEST_ORDER-123",
+            "barcode": null,
+            "ean": null,
+            "upc": null,
+            "allow_backorder": false,
+            "manage_inventory": true,
+            "hs_code": null,
+            "origin_country": null,
+            "mid_code": null,
+            "material": null,
+            "weight": null,
+            "length": null,
+            "height": null,
+            "width": null,
+            "metadata": null,
+            "variant_rank": 0,
+            "thumbnail": null,
+            "product_id": "prod_01KZ37YA6B4XGZ7G7MV3AP382D",
+            "created_at": "2026-08-03T07:20:50.206Z",
+            "updated_at": "2026-08-03T07:20:50.206Z",
+            "deleted_at": null,
+            "images": [],
+            "options": [
+                {
+                    "id": "optval_01KZ37YA6FT8N6V90BRBJB5W3Q",
+                    "value": "Default option value",
+                    "rank": null,
+                    "metadata": null,
+                    "option_id": "opt_01KZ37YA6C53ACM4PSM3CX0S81",
+                    "option": {
+                        "id": "opt_01KZ37YA6C53ACM4PSM3CX0S81",
+                        "title": "Default option",
+                        "is_exclusive": true,
+                        "metadata": null,
+                        "created_at": "2026-08-03T07:20:50.128Z",
+                        "updated_at": "2026-08-03T07:20:50.128Z",
+                        "deleted_at": null
+                    },
+                    "created_at": "2026-08-03T07:20:50.128Z",
+                    "updated_at": "2026-08-03T07:20:50.128Z",
+                    "deleted_at": null
+                }
+            ],
+            "prices": [
+                {
+                    "id": "price_01KZ37YAAC8QAW29BD80930DSE",
+                    "amount": 100,
+                    "currency_code": "eur",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.254Z",
+                    "updated_at": "2026-08-03T07:20:50.254Z",
+                    "rules": {
+                        "region_id": "reg_01KX0SJVQPQAYA0G7G26KZ39YA"
+                    }
+                },
+                {
+                    "id": "price_01KZ37YAACR4DNDS738K4H43RE",
+                    "amount": 100,
+                    "currency_code": "inr",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.254Z",
+                    "updated_at": "2026-08-03T07:20:50.254Z",
+                    "rules": {
+                        "region_id": "reg_01KXGWGXCQVMHH063D55FHE5X4"
+                    }
+                },
+                {
+                    "id": "price_01KZ37YAACRYDG2BZ6TMWAQ656",
+                    "amount": 100,
+                    "currency_code": "gbp",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.254Z",
+                    "updated_at": "2026-08-03T07:20:50.254Z",
+                    "rules": {
+                        "region_id": "reg_01KY4FAZFHTG2AR0KGJC9RA12B"
+                    }
+                },
+                {
+                    "id": "price_01KZ37YAAAPGTQD040XTY7DJHM",
+                    "amount": 100,
+                    "currency_code": "inr",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.254Z",
+                    "updated_at": "2026-08-03T07:20:50.254Z",
+                    "rules": {}
+                },
+                {
+                    "id": "price_01KZ37YAAA1XZ3V50PFE7RQ757",
+                    "amount": 100,
+                    "currency_code": "gbp",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.253Z",
+                    "updated_at": "2026-08-03T07:20:50.253Z",
+                    "rules": {}
+                },
+                {
+                    "id": "price_01KZ37YAAB206SA6BCEXNSFFF1",
+                    "amount": 100,
+                    "currency_code": "usd",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.254Z",
+                    "updated_at": "2026-08-03T07:20:50.254Z",
+                    "rules": {}
+                },
+                {
+                    "id": "price_01KZ37YAAA3CSSEKG242T5Y2YE",
+                    "amount": 100,
+                    "currency_code": "eur",
+                    "min_quantity": null,
+                    "max_quantity": null,
+                    "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+                    "created_at": "2026-08-03T07:20:50.254Z",
+                    "updated_at": "2026-08-03T07:20:50.254Z",
+                    "rules": {}
+                }
+            ]
+        }
+    ],
+    "categories": [],
+    "sales_channels": [
+        {
+            "id": "sc_01KX0SJVMVA470W1G4NPS9HY5M",
+            "name": "Default Sales Channel",
+            "description": "Created by Medusa",
+            "is_disabled": false,
+            "metadata": null,
+            "created_at": "2026-07-08T12:00:02.203Z",
+            "updated_at": "2026-07-08T12:00:02.203Z",
+            "deleted_at": null
+        }
+    ]
+}

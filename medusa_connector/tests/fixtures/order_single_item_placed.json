@@ -1,0 +1,399 @@
+{
+ "id": "order_01KZ3F05BA365ZGQ07FS6T539K",
+ "display_id": 57,
+ "custom_display_id": null,
+ "status": "pending",
+ "version": 2,
+ "summary": {
+  "paid_total": 0,
+  "raw_paid_total": {
+   "value": "0",
+   "precision": 20
+  },
+  "refunded_total": 0,
+  "accounting_total": 100,
+  "credit_line_total": 0,
+  "transaction_total": 0,
+  "pending_difference": 100,
+  "raw_refunded_total": {
+   "value": "0",
+   "precision": 20
+  },
+  "current_order_total": 100,
+  "original_order_total": 0,
+  "raw_accounting_total": {
+   "value": "100",
+   "precision": 20
+  },
+  "raw_credit_line_total": {
+   "value": "0",
+   "precision": 20
+  },
+  "raw_transaction_total": {
+   "value": "0",
+   "precision": 20
+  },
+  "raw_pending_difference": {
+   "value": "100",
+   "precision": 20
+  },
+  "raw_current_order_total": {
+   "value": "100",
+   "precision": 20
+  },
+  "raw_original_order_total": {
+   "value": "0",
+   "precision": 20
+  }
+ },
+ "total": 100,
+ "metadata": null,
+ "locale": null,
+ "created_at": "2026-08-03T09:24:10.731Z",
+ "updated_at": "2026-08-03T09:26:32.043Z",
+ "region_id": "reg_01KXGWGXCQVMHH063D55FHE5X4",
+ "subtotal": 100,
+ "tax_total": 0,
+ "discount_total": 0,
+ "discount_tax_total": 0,
+ "original_total": 100,
+ "original_subtotal": 100,
+ "original_tax_total": 0,
+ "item_total": 100,
+ "item_subtotal": 100,
+ "item_tax_total": 0,
+ "original_item_total": 100,
+ "original_item_subtotal": 100,
+ "original_item_tax_total": 0,
+ "shipping_total": 0,
+ "shipping_subtotal": 0,
+ "shipping_tax_total": 0,
+ "original_shipping_tax_total": 0,
+ "original_shipping_subtotal": 0,
+ "original_shipping_total": 0,
+ "credit_line_total": 0,
+ "credit_line_subtotal": 0,
+ "credit_line_tax_total": 0,
+ "currency_code": "inr",
+ "email": "test@gmail.in",
+ "customer_id": "cus_01KX0VEQBA7HTV5XZ0M2VCNN02",
+ "items": [
+  {
+   "id": "ordli_01KZ3F0KYK26NTVQJH91V7FD3V",
+   "title": "test order item 1",
+   "subtitle": "Default variant",
+   "thumbnail": null,
+   "variant_id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+   "product_id": "prod_01KZ37YA6B4XGZ7G7MV3AP382D",
+   "product_title": "test order item 1",
+   "product_description": "we",
+   "product_subtitle": "Brown",
+   "product_type": null,
+   "product_type_id": null,
+   "product_collection": null,
+   "product_handle": "test-order-item-1",
+   "variant_sku": "TEST_ORDER-123",
+   "variant_barcode": null,
+   "variant_title": "Default variant",
+   "variant_option_values": null,
+   "requires_shipping": true,
+   "is_giftcard": false,
+   "is_discountable": true,
+   "is_tax_inclusive": false,
+   "is_custom_price": false,
+   "metadata": {},
+   "raw_compare_at_unit_price": null,
+   "raw_unit_price": {
+    "value": "100",
+    "precision": 20
+   },
+   "created_at": "2026-08-03T09:24:25.683Z",
+   "updated_at": "2026-08-03T09:24:25.683Z",
+   "deleted_at": null,
+   "tax_lines": [],
+   "adjustments": [],
+   "compare_at_unit_price": null,
+   "unit_price": 100,
+   "quantity": 1,
+   "raw_quantity": {
+    "value": "1",
+    "precision": 20
+   },
+   "line_item_metadata": {},
+   "detail": {
+    "id": "orditem_01KZ3F0ZTQZJG60YB5DH0BPA5P",
+    "version": 2,
+    "metadata": null,
+    "order_id": "order_01KZ3F05BA365ZGQ07FS6T539K",
+    "raw_unit_price": {
+     "value": "100",
+     "precision": 20
+    },
+    "raw_compare_at_unit_price": null,
+    "raw_quantity": {
+     "value": "1",
+     "precision": 20
+    },
+    "raw_fulfilled_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_delivered_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_shipped_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_requested_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_received_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_return_dismissed_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "raw_written_off_quantity": {
+     "value": "0",
+     "precision": 20
+    },
+    "created_at": "2026-08-03T09:24:37.848Z",
+    "updated_at": "2026-08-03T09:24:37.848Z",
+    "deleted_at": null,
+    "item_id": "ordli_01KZ3F0KYK26NTVQJH91V7FD3V",
+    "unit_price": 100,
+    "compare_at_unit_price": null,
+    "quantity": 1,
+    "fulfilled_quantity": 0,
+    "delivered_quantity": 0,
+    "shipped_quantity": 0,
+    "return_requested_quantity": 0,
+    "return_received_quantity": 0,
+    "return_dismissed_quantity": 0,
+    "written_off_quantity": 0
+   },
+   "subtotal": 100,
+   "total": 100,
+   "original_subtotal": 100,
+   "original_total": 100,
+   "discount_subtotal": 0,
+   "discount_tax_total": 0,
+   "discount_total": 0,
+   "tax_total": 0,
+   "original_tax_total": 0,
+   "refundable_total_per_unit": 100,
+   "refundable_total": 100,
+   "fulfilled_total": 0,
+   "shipped_total": 0,
+   "return_requested_total": 0,
+   "return_received_total": 0,
+   "return_dismissed_total": 0,
+   "write_off_total": 0,
+   "raw_subtotal": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_total": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_original_subtotal": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_original_total": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_discount_subtotal": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_discount_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_original_tax_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_refundable_total_per_unit": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_refundable_total": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_fulfilled_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_shipped_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_requested_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_received_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_return_dismissed_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "raw_write_off_total": {
+    "value": "0",
+    "precision": 20
+   },
+   "variant": {
+    "id": "variant_01KZ37YA8YDS9MDCNEQEY7KZRT",
+    "title": "Default variant",
+    "sku": "TEST_ORDER-123",
+    "barcode": null,
+    "ean": null,
+    "upc": null,
+    "allow_backorder": false,
+    "manage_inventory": true,
+    "hs_code": null,
+    "origin_country": null,
+    "mid_code": null,
+    "material": null,
+    "weight": null,
+    "length": null,
+    "height": null,
+    "width": null,
+    "metadata": null,
+    "variant_rank": 0,
+    "thumbnail": null,
+    "product_id": "prod_01KZ37YA6B4XGZ7G7MV3AP382D",
+    "product": {
+     "id": "prod_01KZ37YA6B4XGZ7G7MV3AP382D",
+     "title": "test order item 1",
+     "handle": "test-order-item-1",
+     "subtitle": "Brown",
+     "description": "we",
+     "is_giftcard": false,
+     "status": "published",
+     "thumbnail": null,
+     "weight": null,
+     "length": null,
+     "height": null,
+     "width": null,
+     "origin_country": null,
+     "hs_code": "999800",
+     "mid_code": "",
+     "material": null,
+     "discountable": true,
+     "external_id": null,
+     "metadata": null,
+     "type_id": null,
+     "type": null,
+     "collection_id": null,
+     "collection": null,
+     "created_at": "2026-08-03T07:20:50.128Z",
+     "updated_at": "2026-08-03T07:24:49.662Z",
+     "deleted_at": null
+    },
+    "created_at": "2026-08-03T07:20:50.206Z",
+    "updated_at": "2026-08-03T07:20:50.206Z",
+    "deleted_at": null
+   }
+  }
+ ],
+ "credit_lines": [],
+ "shipping_address": {
+  "id": "ordaddr_01KZ3F05B74D6245F8V7ACRVKV",
+  "customer_id": null,
+  "company": "",
+  "first_name": "Test",
+  "last_name": "User",
+  "address_1": "12 MG Road",
+  "address_2": "Near Central Mall",
+  "city": "Chennai",
+  "country_code": "in",
+  "province": "Tamil Nadu",
+  "postal_code": "600001",
+  "phone": "",
+  "metadata": null,
+  "created_at": "2026-08-03T09:24:10.731Z",
+  "updated_at": "2026-08-03T09:24:10.731Z",
+  "deleted_at": null
+ },
+ "billing_address": {
+  "id": "ordaddr_01KZ3F3677DD87GXJD0KSZGPAG",
+  "customer_id": null,
+  "company": "Test Billing Pvt Ltd",
+  "first_name": "Test",
+  "last_name": "User",
+  "address_1": "45 Anna Salai",
+  "address_2": "Suite 2B",
+  "city": "Chennai",
+  "country_code": "in",
+  "province": "Tamil Nadu",
+  "postal_code": "600002",
+  "phone": "",
+  "metadata": null,
+  "created_at": "2026-08-03T09:24:10.731Z",
+  "updated_at": "2026-08-03T09:24:10.731Z",
+  "deleted_at": null
+ },
+ "shipping_methods": [],
+ "customer": {
+  "id": "cus_01KX0VEQBA7HTV5XZ0M2VCNN02",
+  "company_name": null,
+  "first_name": "test",
+  "last_name": null,
+  "email": "test@gmail.in",
+  "phone": null,
+  "has_account": false,
+  "metadata": null,
+  "created_by": "user_01KX0VAKVJ6QNVBNQSG9QYMFSK",
+  "created_at": "2026-07-08T12:32:43.882Z",
+  "updated_at": "2026-07-08T12:32:43.882Z",
+  "deleted_at": null
+ },
+ "payment_collections": [
+  {
+   "id": "pay_col_01KZ3F0ZWEJMBW8ANVJS18D6ZN",
+   "currency_code": "inr",
+   "completed_at": null,
+   "status": "not_paid",
+   "metadata": null,
+   "raw_amount": {
+    "value": "100",
+    "precision": 20
+   },
+   "raw_authorized_amount": null,
+   "raw_captured_amount": null,
+   "raw_refunded_amount": null,
+   "created_at": "2026-08-03T09:24:37.902Z",
+   "updated_at": "2026-08-03T09:24:37.902Z",
+   "deleted_at": null,
+   "payments": [],
+   "amount": 100,
+   "authorized_amount": null,
+   "captured_amount": null,
+   "refunded_amount": null
+  }
+ ],
+ "fulfillments": [],
+ "payment_status": "not_paid",
+ "fulfillment_status": "not_fulfilled"
+}

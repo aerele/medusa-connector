@@ -29,6 +29,7 @@ class TestCase(IntegrationTestCase):
 		"medusa_base_url": "https://medusa.test.com",
 		"api_key": "test_api_key",
 		"upload_erpnext_items": 1,
+		"update_medusa_item_on_update": 1,
 		"update_erpnext_stock_levels_to_medusa": 1,
 		"sync_new_item_as_published": 0,
 		"upload_variants_as_items": 1,
