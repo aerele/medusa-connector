@@ -1,168 +1,84 @@
-<div align="center">
-    <a href="https://github.com/aerele/medusa-connector">
-	<img src="./medusa_connector/public/images/medusa-connector.svg" alt="Medusa Connector Logo" height="80px" width="80px"/>
-    </a>
-    <h2>Medusa Connector for ERPNext</h2>
-    <div align="center">
-        <p>Connect Medusa and ERPNext.</p>
-    </div>
+# Medusa Connector
 
-[![CI](https://github.com/aerele/medusa-connector/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/aerele/medusa-connector/actions/workflows/ci.yml)
-[![Linters](https://github.com/aerele/medusa-connector/actions/workflows/linters.yml/badge.svg?branch=develop)](https://github.com/aerele/medusa-connector/actions/workflows/linters.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](license.txt)
-</div>
+Medusa Connector integrates Medusa v2 with ERPNext through Ecommerce Core. It converts Medusa commerce activity into traceable ERPNext selling, stock, and accounting documents while keeping ERPNext authoritative for inventory and accounting.
 
-<div align="center">
-	<a href="docs/MEDUSA_WEBHOOK_SETUP.md">Webhook Setup Guide</a>
-	-
-	<a href="docs/MEDUSA_ORDER_LIFECYCLE.md">Order Lifecycle Guide</a>
-	-
-	<a href="https://github.com/aerele/medusa-connector/issues">Report a Bug</a>
-	-
-	<a href="https://github.com/aerele/medusa-connector/pulls">Contribute</a>
-</div>
-<br>
+## What the connector synchronizes
 
-<div align="center">
-  <img src="./medusa_connector/public/images/medusa-settings-demo.gif" alt="Medusa Connector Setup" width="1000">
-  <p><em>Medusa Connector configuration and synchronization workflow.</em></p>
-</div>
+### Products, variants, and inventory
 
-## Medusa Connector
+ERPNext Items are synchronized with Medusa products and variants. Medusa stock locations are mapped to ERPNext warehouses through Ecommerce Core warehouse mappings. Inventory updates use those mappings so stock is attributed to the correct physical location rather than a connector-wide fallback.
 
-Medusa Connector integrates ERPNext with the Medusa headless commerce platform. Built on top of [Ecommerce Core](https://github.com/aerele/ecommerce-core), it synchronizes products, inventory, customers, orders, payments, fulfillments, returns, claims, exchanges, refunds, and webhooks while keeping ERPNext as the system of record for inventory and accounting.
+### Customers and addresses
 
-### Motivation
+Orders resolve or create the corresponding ERPNext Customer and billing and shipping addresses. Medusa customer and address identifiers are stored on ERPNext records so repeated events update the same records instead of creating duplicates.
 
-Medusa provides a flexible headless commerce platform, while ERPNext manages products, inventory, accounting, and fulfillment. This connector keeps both systems synchronized through shared workflows, scheduled synchronization, and secure webhooks, allowing each platform to focus on what it does best.
+### Orders and lifecycle state
 
-### Key Features
+A Medusa order creates one ERPNext Sales Order containing the mapped customer, addresses, items, shipping charges, taxes, discounts, currency, warehouses, and Medusa identifiers. Payment, invoice, fulfillment, shipment, cancellation, return, claim, exchange, and refund states are subsequently projected onto the linked ERPNext documents.
 
-| Workflow | Direction | What the app does |
-| --- | --- | --- |
-| Product catalogue | Medusa → ERPNext | Imports Medusa products as ERPNext Items, creating variants, Item Groups, Brands, Attributes, prices, barcodes, and HSN codes while updating only changed records. |
-| Product catalogue | ERPNext → Medusa | Uploads new ERPNext Items and optional Item Variants to Medusa, skipping already synchronized products. |
-| Inventory | ERPNext → Medusa | Synchronizes stock from mapped ERPNext Warehouses to Medusa locations using scheduled or manual synchronization. |
-| Orders | Medusa → ERPNext | Creates and updates ERPNext Sales Orders, Customers, Addresses, and related documents from Medusa orders. |
-| Payments & Fulfillments | Medusa → ERPNext | Synchronizes payments, invoices, delivery notes, fulfillments, cancellations, and shipments. |
-| Returns & Refunds | Medusa → ERPNext | Synchronizes returns, claims, exchanges, refunds, credit notes, and replacement workflows. |
-| Webhooks | Medusa → ERPNext | Verifies signed webhook events, ignores duplicate deliveries, and processes supported Medusa events. |
-| Connection | — | Validates the Medusa connection, synchronizes store metadata, and manages webhook registrations. |
+The connector hydrates the complete Medusa order state, including items, variants, adjustments, tax lines, shipping methods, payment collections, refunds, fulfillments, returns, claims, exchanges, transactions, credits, and computed totals. Historical synchronization uses the same lifecycle pipeline as webhooks and can recover missed events safely.
 
-Synchronization runs as background jobs. Every request, synchronization, failure, and retry is recorded in Ecommerce Integration Log, providing complete traceability and safe retry support.
+### Discounts and promotions
 
-### Under the Hood
+Medusa computed item and shipping adjustments are authoritative. The connector supports the resulting values from fixed-amount, percentage, order-wide, free-shipping, and Buy-X-Get-Y promotions. Item discounts are represented on Sales Order rows, while discounted shipping is represented by the computed shipping charge.
 
-- [**Medusa**](https://github.com/medusajs/medusa): The open-source headless commerce platform whose Admin API the connector talks to and whose store events arrive through signed webhooks.
-- [**Frappe Framework**](https://github.com/frappe/frappe): A full-stack web application framework written in Python and JavaScript, providing the database layer, background job queue, and REST API this integration runs on.
-- [**ERPNext**](https://github.com/frappe/erpnext): Provides the item, inventory, accounting, and sales workflows used by the connector.
-- [**Ecommerce Core**](https://github.com/aerele/ecommerce-core): Provides the shared contracts, Ecommerce Item mapping, warehouse mapping, integration logging, and synchronization utilities used across ecommerce connectors.
+Medusa line identities are stored on ERPNext child rows for reliable reconciliation. Before submission, the ERPNext grand total is compared with the Medusa order total; a mismatch stops synchronization instead of creating a financially incorrect document. Existing orders are checked by the same invariant so historical discount errors cannot pass silently.
 
-## Compatibility
+Gift cards and credit lines are treated as financial credits, not product discounts, preserving the distinction between promotion value and tender or account credit.
 
-| Component | Version |
-| --- | --- |
-| Python | 3.14 |
-| Frappe Framework | v16 (`develop`) |
-| ERPNext | v16 (`develop`) |
-| Ecommerce Core | v16 (`develop`) |
+### Taxes and pricing
 
-## Installation
+Both tax-exclusive and tax-inclusive Medusa pricing are supported. The connector uses Medusa net subtotals and computed item and shipping tax lines, preventing inclusive tax from being added twice. Taxes are mapped to configured ERPNext accounts and may be consolidated while retaining item-wise tax detail.
 
-Install Ecommerce Core before Medusa Connector on an existing Frappe bench with ERPNext installed.
+Medusa computed totals remain authoritative, with ERPNext currency precision applied only at document rounding boundaries.
 
-```bash
-bench get-app ecommerce_core https://github.com/aerele/ecommerce-core.git --branch develop
-bench get-app medusa_connector https://github.com/aerele/medusa-connector.git --branch develop
-bench --site <site-name> install-app ecommerce_core
-bench --site <site-name> install-app medusa_connector
-```
+### Payments, invoices, and fulfillments
 
-## Setup
+Captured Medusa payments can create linked ERPNext Payment Entries and Sales Invoices according to Medusa Settings. Fulfillments create Delivery Notes for the fulfilled quantities and warehouse mappings. Shipment and cancellation events update or reverse the appropriate linked documents without duplicating previously processed events.
 
-Configure the connector from the **Medusa Settings** workspace.
+Every document carries the relevant Medusa order, payment, fulfillment, and transaction identifiers for auditability and idempotency.
 
-**1. Connect**
-Enter the Medusa Base URL and Admin API Key, then select **Enabled** and save.
-The connection is re-verified whenever the connector is enabled or its URL or
-API key changes, and the Connection Status field reports whether the store was
-reached.
+### Returns
 
-**2. Set the product defaults**
-Choose the Default Warehouse, Default Item Group, Default Stock UOM, and Price
-List that incoming Medusa products are created against.
+A requested return updates the synchronized order state but does not move inventory. Once Medusa reports the return as received, the connector creates an ERPNext Return Delivery Note against the submitted outbound Delivery Note.
 
-**3. Map warehouses to locations**
-Use **Fetch Medusa Locations** to populate **Medusa Warehouse Mapping**, then
-pair each Medusa location with an ERPNext Warehouse. Inventory sync publishes
-stock only for mapped warehouses.
+Sellable quantities are received into Return Warehouse. Lines reported as damaged are routed to Damaged Return Warehouse. A missing required warehouse or missing source Delivery Note stops processing with an actionable error rather than posting inventory incorrectly.
 
-**4. Register webhooks**
-Generate the Webhook Secret, install the webhook plugin on the Medusa side,
-and click **Sync Webhooks**. Supported product, order, payment, fulfillment,
-shipment, return, claim, exchange, and refund events are registered
-automatically. The Registered Webhooks table shows every subscription the
-connector owns, and Webhook Plugin Status reports whether the Medusa plugin
-is installed. The full walkthrough is in the
-[Webhook Setup Guide](docs/MEDUSA_WEBHOOK_SETUP.md).
+### Claims
 
-**5. Enable the workflows you need**
+Refund claims use the refund accounting workflow. Replacement claims process the inbound returned goods and create a separate outbound Delivery Note for replacement items. Claim identifiers are stored on all resulting documents, making webhook retries idempotent.
 
-| To do this | Enable |
-| --- | --- |
-| Upload items to Medusa | **Upload New ERPNext Items to Medusa**, plus **Update Medusa Products on Item Update**, **Upload ERPNext Item Variants to Medusa**, and **Sync New Items as Published** as needed |
-| Publish stock levels | **Update Stock Levels to Medusa**, an Inventory Sync Frequency, and a completed warehouse mapping |
+### Exchanges
 
-## Operations
+An exchange is represented as two explicit stock movements: a received return against the original outbound Delivery Note and a standalone outbound Delivery Note for the replacement items. This preserves the audit trail for both directions and allows each movement to be retried safely.
 
-Use the following to monitor connector activity:
+### Refunds
 
-- **Last Product Sync** and **Last Inventory Sync** confirm scheduled synchronization.
-- **Connection Status** records the last connectivity test with Medusa.
-- **Webhook Plugin Status** and **Last Webhook Sync** show webhook registration status.
-- **Ecommerce Integration Log** records every synchronization request, response, failure, and retry.
-- Historical synchronization can safely recover missed webhook events.
+Full and partial refunds create ERPNext Credit Notes against the original submitted Sales Invoice. When a Cash / Bank Account is configured, the connector also creates the corresponding refund Payment Entry.
 
-## Documentation
+Partial refunds do not cancel the original invoice or receipt. Medusa refund identifiers prevent the same refund from being applied twice.
 
-- [Webhook Setup Guide](docs/MEDUSA_WEBHOOK_SETUP.md)
+## Reliability and audit behavior
 
-## Development
+Webhook processing is idempotent by Medusa order, order-line, payment, refund, fulfillment, return, claim, exchange, and transaction identifiers. The webhook endpoint validates the configured signature and queues processing. Provider credentials and personal or payment payloads are redacted from integration logs.
 
-```bash
-bench --site <site-name> set-config developer_mode 1
-bench --site <site-name> migrate
-bench --site <site-name> run-tests --app medusa_connector
-```
+Full order reconciliation is the recovery mechanism for missed or out-of-order events. Submitted historical ERPNext documents with total mismatches are reported for controlled reconciliation; they are not silently cancelled or amended.
 
-Run formatting, linting, and tests before opening a pull request:
+## Configuration
 
-```bash
-cd apps/medusa_connector
-pre-commit install
-pre-commit run --all-files
-```
+1. Install `erpnext`, `ecommerce_core`, and `medusa_connector`, then run `bench --site <site> migrate`.
+2. Open Medusa Settings and configure the Medusa Base URL and Admin API Key.
+3. Select Company, Selling Price List, Customer Group, Item Group, Stock UOM, and default Warehouse.
+4. Configure Return Warehouse and Damaged Return Warehouse before receiving returned goods.
+5. Map every Medusa stock location to its ERPNext Warehouse.
+6. Map Medusa tax rates and shipping options to ERPNext accounts, and configure the default tax and shipping accounts.
+7. Configure Sales Order, Sales Invoice, Delivery Note, and Payment Entry behavior and naming series as required.
+8. Set a Cash / Bank Account when captured-payment or refund Payment Entries should be created.
+9. Enable the connector and use Sync Webhooks to register connector-owned order, payment, fulfillment, return, claim, and exchange events.
+10. Use Sync Orders with an explicit date range for historical import or current-state reconciliation. Repeated synchronization is safe.
 
-## Contributing
+## Operational expectations
 
-Contributions are welcome. Before opening a pull request, please create or
-reference an issue, keep changes focused, add tests for new behavior, and
-target the `develop` branch.
+ERPNext stock rules remain enforced. Delivery, replacement, or return documents will not be forced through insufficient stock, missing warehouse mappings, or invalid accounting configuration. Correct those operational conditions and retry the Medusa event or order reconciliation.
 
-- [Report a Bug or Request a Feature](https://github.com/aerele/medusa-connector/issues)
-- [Open a Pull Request](https://github.com/aerele/medusa-connector/pulls)
-
-## License
-
-This project is licensed under the [MIT License](license.txt).
-
-<br>
-<br>
-<div align="center">
-	<a href="https://aerele.in">
-		<picture>
-			<source media="(prefers-color-scheme: dark)" srcset="./medusa_connector/public/images/aerele-dark.png">
-			<img src="./medusa_connector/public/images/aerele.png" alt="Aerele Technologies" height="32"/>
-		</picture>
-	</a>
-</div>
+Use Ecommerce Integration Log to monitor queued, successful, skipped, and failed operations. Each log entry records the operation and relevant Medusa identity without exposing configured secrets.

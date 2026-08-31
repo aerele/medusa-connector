@@ -65,7 +65,8 @@ export const ERPNEXT_WEBHOOK_EVENTS = [
 
   // Fulfillment
   "order.fulfillment_created",
-  "order.shipment_created",
+  "shipment.created",
+  "delivery.created",
   "fulfillment.canceled",
 
   // Returns
