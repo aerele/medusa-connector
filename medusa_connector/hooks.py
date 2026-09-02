@@ -152,9 +152,19 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
+scheduler_events = {
+	"all": [
+		"medusa_connector.product.inventory_export.update_inventory_on_medusa",
+	],
+}
 
-# }
+# Desk page client scripts are loaded automatically from page/ folders.
+# Keep log retention configurable.
+
+
+# Desk page client scripts are loaded automatically from page/ folders.
+# Keep log retention configurable.
+
 
 # Desk page client scripts are loaded automatically from page/ folders.
 # Keep log retention configurable.

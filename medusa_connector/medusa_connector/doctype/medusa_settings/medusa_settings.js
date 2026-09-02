@@ -120,6 +120,39 @@ function toggle_buttons(frm) {
 	if (!frm.doc.enabled) {
 		return;
 	}
+
+	// —— Inventory ——
+	if (frm.doc.update_erpnext_stock_levels_to_medusa && has_enabled_warehouse_mapping(frm)) {
+		frm.add_custom_button(
+			__("Sync Inventory Now"),
+			() => {
+				frappe.call({
+					method: "medusa_connector.product.inventory_export.sync_inventory_now",
+					freeze: true,
+					freeze_message: __("Pushing ERPNext stock levels to Medusa…"),
+					callback: (r) => {
+						const m = r.message || {};
+						frm.reload_doc();
+						if (m.status === "Success") {
+							frappe.show_alert({ message: m.message, indicator: "green" });
+						} else if (m.status === "Busy" || m.status === "Skipped") {
+							frappe.show_alert({ message: m.message, indicator: "blue" });
+						} else if (m.status === "Partial Success") {
+							frappe.show_alert({ message: m.message, indicator: "orange" });
+						} else {
+							frappe.msgprint({
+								title: __("Inventory Sync"),
+								message: m.message || __("Inventory sync failed."),
+								indicator: "red",
+							});
+						}
+					},
+				});
+			},
+			__("Inventory")
+		);
+	}
+
 	const hasWebhookSecret = Boolean(frm.doc.webhook_secret);
 	frm.set_df_property(
 		"generate_secret_key",
