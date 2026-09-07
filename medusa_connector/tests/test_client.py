@@ -1,4 +1,5 @@
 # Copyright (c) 2026, Aerele Technologies and contributors
+
 # For license information, please see license.txt
 
 """Tests for Medusa webhook API operations."""
