@@ -1,8 +1,8 @@
 app_name = "medusa_connector"
 app_title = "Medusa Connector"
-app_publisher = "Aerele"
-app_description = "connect erpnext to medusa"
-app_email = "karuppasamy@aerele.in"
+app_publisher = "Aerele Technologies"
+app_description = "Connect ERPNext with Medusa for seamless product, inventory, and order synchronization."
+app_email = "integrations-support@aerele.in"
 app_license = "mit"
 
 # Send non-GET requests for this app's endpoints as native `application/json`
