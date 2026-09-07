@@ -1,9 +1,9 @@
 [project]
 name = "medusa_connector"
 authors = [
-    { name = "Aerele", email = "karuppasamy@aerele.in"}
+    { name = "Aerele Technologies", email = "integrations-support@aerele.in"}
 ]
-description = "connect erpnext to medusa"
+description = "Connect ERPNext with Medusa for seamless product, inventory, and order synchronization."
 requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]
