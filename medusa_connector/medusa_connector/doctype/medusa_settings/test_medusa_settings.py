@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Aerele and Contributors
+# Copyright (c) 2026, Aerele Technologies and Contributors
 # See license.txt
 
 from unittest.mock import patch

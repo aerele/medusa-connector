@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Aerele and contributors
+# Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 """Logging utilities for Medusa sync and webhook operations.
 

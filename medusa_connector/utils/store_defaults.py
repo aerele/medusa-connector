@@ -1,4 +1,4 @@
-# Copyright (c) 2026, Aerele and contributors
+# Copyright (c) 2026, Aerele Technologies and contributors
 # For license information, please see license.txt
 
 """Fetch and persist Medusa store defaults onto Medusa Settings.
