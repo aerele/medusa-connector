@@ -3,7 +3,7 @@ app_title = "Medusa Connector"
 app_publisher = "Aerele Technologies"
 app_description = "Connect ERPNext with Medusa for seamless product, inventory, and order synchronization."
 app_email = "integrations-support@aerele.in"
-app_license = "mit"
+app_license = "GNU GPL v3.0"
 
 # Send non-GET requests for this app's endpoints as native `application/json`
 # bodies instead of form-encoded, per-key JSON-stringified values.
