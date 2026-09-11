@@ -9,13 +9,11 @@
 
 [![CI](https://github.com/aerele/medusa-connector/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/aerele/medusa-connector/actions/workflows/ci.yml)
 [![Linters](https://github.com/aerele/medusa-connector/actions/workflows/linters.yml/badge.svg?branch=develop)](https://github.com/aerele/medusa-connector/actions/workflows/linters.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](license.txt)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](license.txt)
 </div>
 
 <div align="center">
 	<a href="docs/MEDUSA_WEBHOOK_SETUP.md">Webhook Setup Guide</a>
-	-
-	<a href="docs/MEDUSA_ORDER_LIFECYCLE.md">Order Lifecycle Guide</a>
 	-
 	<a href="https://github.com/aerele/medusa-connector/issues">Report a Bug</a>
 	-
@@ -154,7 +152,7 @@ target the `develop` branch.
 
 ## License
 
-This project is licensed under the [MIT License](license.txt).
+This project is licensed under the [GNU General Public License v3.0](license.txt).
 
 <br>
 <br>
