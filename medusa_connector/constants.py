@@ -49,6 +49,9 @@ PRODUCT_SYNC_REALTIME_KEY = "medusa.key.sync.products"
 CUSTOMER_ID_FIELD = "medusa_customer_id"
 ADDRESS_ID_FIELD = "medusa_address_id"
 
+MEDUSA_CATEGORIES_FIELD = "medusa_categories"
+MEDUSA_COLLECTION_FIELD = "medusa_collection"
+
 ORDER_ID_FIELD = "medusa_order_id"
 ORDER_NUMBER_FIELD = "medusa_order_number"
 ORDER_STATUS_FIELD = "medusa_order_status"
@@ -60,13 +63,16 @@ RETURN_ID_FIELD = "medusa_return_id"
 CLAIM_ID_FIELD = "medusa_claim_id"
 EXCHANGE_ID_FIELD = "medusa_exchange_id"
 
+DEFAULT_OPTION_VALUE = "Default option value"
+DEFAULT_VARIANT_TITLE = "Default variant"  # Medusa Admin's native default variant title
+DEFAULT_OPTION_VALUES = (DEFAULT_OPTION_VALUE, DEFAULT_VARIANT_TITLE)
+
 
 class MedusaOperationStatus(Enum):
 	"""Status values for Medusa connector operations."""
 
 	SUCCESS = "success"
 	SKIPPED = "skipped"
-	INVALID = "invalid"
 	ERROR = "error"
 
 
@@ -74,7 +80,6 @@ class IntegrationLogStatus(Enum):
 	"""Status values for Ecommerce Integration Log entries."""
 
 	SUCCESS = "Success"
-	INVALID = "Invalid"
 	ERROR = "Error"
 	QUEUED = "Queued"
 	FAILED = "Failed"
@@ -84,7 +89,6 @@ class IntegrationLogStatus(Enum):
 _RESULT_STATUS_MAP = {
 	MedusaOperationStatus.SUCCESS.value: IntegrationLogStatus.SUCCESS.value,
 	MedusaOperationStatus.SKIPPED.value: IntegrationLogStatus.SUCCESS.value,
-	MedusaOperationStatus.INVALID.value: IntegrationLogStatus.INVALID.value,
 	MedusaOperationStatus.ERROR.value: IntegrationLogStatus.ERROR.value,
 }
 
