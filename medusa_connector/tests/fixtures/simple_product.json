@@ -1,0 +1,228 @@
+{
+  "id": "prod_01J7X9K2M3N4P5Q6R7S8T9U0V",
+  "title": "Classic Cotton T-Shirt",
+  "subtitle": "Premium Quality Basic Tee",
+  "status": "published",
+  "external_id": null,
+  "description": "A comfortable classic cotton t-shirt suitable for everyday wear. Made from 100% premium cotton with a relaxed fit.",
+  "handle": "classic-cotton-t-shirt",
+  "is_giftcard": false,
+  "discountable": true,
+  "thumbnail": "http://localhost:9000/static/classic-tshirt-thumb.jpg",
+  "collection_id": "pcol_01J7X9A1B2C3D4E5F6G7H8I9J",
+  "type_id": "ptyp_01J7X9L4M5N6O7P8Q9R0S1T2U",
+  "weight": 200.0,
+  "length": null,
+  "height": null,
+  "width": null,
+  "hs_code": "61091000",
+  "origin_country": "IN",
+  "mid_code": null,
+  "material": "Cotton",
+  "created_at": "2026-07-31T10:30:00.000Z",
+  "updated_at": "2026-07-31T10:30:00.000Z",
+  "deleted_at": null,
+  "metadata": null,
+  "type": {
+    "id": "ptyp_01J7X9L4M5N6O7P8Q9R0S1T2U",
+    "value": "Apparel",
+    "external_id": null,
+    "metadata": null,
+    "created_at": "2026-07-31T10:00:00.000Z",
+    "updated_at": "2026-07-31T10:00:00.000Z",
+    "deleted_at": null
+  },
+  "collection": {
+    "id": "pcol_01J7X9A1B2C3D4E5F6G7H8I9J",
+    "title": "Basic Collection",
+    "handle": "basic-collection",
+    "external_id": null,
+    "metadata": null,
+    "created_at": "2026-07-31T09:00:00.000Z",
+    "updated_at": "2026-07-31T09:00:00.000Z",
+    "deleted_at": null
+  },
+  "options": [
+    {
+      "id": "opt_01J7X9B2C3D4E5F6G7H8I9J0K",
+      "title": "Default option",
+      "is_exclusive": true,
+      "metadata": null,
+      "created_at": "2026-07-31T10:30:00.000Z",
+      "updated_at": "2026-07-31T10:30:00.000Z",
+      "deleted_at": null,
+      "values": [
+        {
+          "id": "optval_01J7X9C3D4E5F6G7H8I9J0K1L",
+          "value": "Default option value",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7X9B2C3D4E5F6G7H8I9J0K",
+          "created_at": "2026-07-31T10:30:00.000Z",
+          "updated_at": "2026-07-31T10:30:00.000Z",
+          "deleted_at": null
+        }
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "id": "ptag_01J7X9D4E5F6G7H8I9J0K1L2M",
+      "value": "BASICS",
+      "external_id": null,
+      "metadata": null,
+      "created_at": "2026-07-31T10:15:00.000Z",
+      "updated_at": "2026-07-31T10:15:00.000Z",
+      "deleted_at": null
+    }
+  ],
+  "images": [
+    {
+      "id": "img_01J7X9E5F6G7H8I9J0K1L2M3N",
+      "url": "http://localhost:9000/static/classic-tshirt-front.jpg",
+      "metadata": null,
+      "rank": 0,
+      "product_id": "prod_01J7X9K2M3N4P5Q6R7S8T9U0V",
+      "created_at": "2026-07-31T10:30:00.000Z",
+      "updated_at": "2026-07-31T10:30:00.000Z",
+      "deleted_at": null
+    }
+  ],
+  "variants": [
+    {
+      "id": "variant_01J7X9F6G7H8I9J0K1L2M3N4O",
+      "title": "Default variant",
+      "sku": "CCT-SINGLE-BLK",
+      "barcode": "8901234567890",
+      "ean": "8901234567890",
+      "upc": null,
+      "allow_backorder": true,
+      "manage_inventory": true,
+      "hs_code": "61091000",
+      "origin_country": "IN",
+      "mid_code": null,
+      "material": "Cotton",
+      "weight": 200.0,
+      "length": null,
+      "height": null,
+      "width": null,
+      "metadata": null,
+      "variant_rank": 0,
+      "thumbnail": null,
+      "product_id": "prod_01J7X9K2M3N4P5Q6R7S8T9U0V",
+      "created_at": "2026-07-31T10:30:01.000Z",
+      "updated_at": "2026-07-31T10:30:01.000Z",
+      "deleted_at": null,
+      "images": [
+        {
+          "id": "img_01J7X9E5F6G7H8I9J0K1L2M3N",
+          "url": "http://localhost:9000/static/classic-tshirt-front.jpg",
+          "metadata": null,
+          "rank": 0,
+          "product_id": "prod_01J7X9K2M3N4P5Q6R7S8T9U0V",
+          "created_at": "2026-07-31T10:30:00.000Z",
+          "updated_at": "2026-07-31T10:30:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "options": [
+        {
+          "id": "optval_01J7X9C3D4E5F6G7H8I9J0K1L",
+          "value": "Default option value",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7X9B2C3D4E5F6G7H8I9J0K",
+          "option": {
+            "id": "opt_01J7X9B2C3D4E5F6G7H8I9J0K",
+            "title": "Default option",
+            "is_exclusive": true,
+            "metadata": null,
+            "created_at": "2026-07-31T10:30:00.000Z",
+            "updated_at": "2026-07-31T10:30:00.000Z",
+            "deleted_at": null
+          },
+          "created_at": "2026-07-31T10:30:00.000Z",
+          "updated_at": "2026-07-31T10:30:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "prices": [
+        {
+          "id": "price_01J7X9G7H8I9J0K1L2M3N4O5P",
+          "amount": 1499,
+          "currency_code": "inr",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7X9F6G7H8I9J0K1L2M3N4O",
+          "created_at": "2026-07-31T10:30:02.000Z",
+          "updated_at": "2026-07-31T10:30:02.000Z",
+          "rules": {}
+        },
+        {
+          "id": "price_01J7X9H8I9J0K1L2M3N4O5P6Q",
+          "amount": 18,
+          "currency_code": "usd",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7X9F6G7H8I9J0K1L2M3N4O",
+          "created_at": "2026-07-31T10:30:02.000Z",
+          "updated_at": "2026-07-31T10:30:02.000Z",
+          "rules": {}
+        },
+        {
+          "id": "price_01J7X9I9J0K1L2M3N4O5P6Q7R",
+          "amount": 15,
+          "currency_code": "eur",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7X9F6G7H8I9J0K1L2M3N4O",
+          "created_at": "2026-07-31T10:30:02.000Z",
+          "updated_at": "2026-07-31T10:30:02.000Z",
+          "rules": {}
+        },
+        {
+          "id": "price_01J7X9J0K1L2M3N4O5P6Q7R8S",
+          "amount": 13,
+          "currency_code": "gbp",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7X9F6G7H8I9J0K1L2M3N4O",
+          "created_at": "2026-07-31T10:30:02.000Z",
+          "updated_at": "2026-07-31T10:30:02.000Z",
+          "rules": {}
+        }
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "pcat_01J7X9A2B3C4D5E6F7G8H9I0J",
+      "name": "Men's Clothing",
+      "description": "Apparel for men",
+      "handle": "mens-clothing",
+      "mpath": "pcat_01J7X9A2B3C4D5E6F7G8H9I0J",
+      "is_active": true,
+      "is_internal": false,
+      "rank": 1,
+      "external_id": null,
+      "metadata": null,
+      "parent_category_id": null,
+      "parent_category": null,
+      "created_at": "2026-07-31T09:00:00.000Z",
+      "updated_at": "2026-07-31T09:00:00.000Z",
+      "deleted_at": null
+    }
+  ],
+  "sales_channels": [
+    {
+      "id": "sc_01KX0SJVMVA470W1G4NPS9HY5M",
+      "name": "Default Sales Channel",
+      "description": "Created by Medusa",
+      "is_disabled": false,
+      "metadata": null,
+      "created_at": "2026-07-08T12:00:02.203Z",
+      "updated_at": "2026-07-08T12:00:02.203Z",
+      "deleted_at": null
+    }
+  ]
+}
