@@ -1,0 +1,390 @@
+{
+  "id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+  "title": "Trailblazer Running Sneakers",
+  "subtitle": "Lightweight Everyday Trainers",
+  "status": "published",
+  "external_id": null,
+  "description": "Breathable running sneakers with a cushioned midsole and durable rubber outsole, built for daily wear and light training.",
+  "handle": "trailblazer-running-sneakers",
+  "is_giftcard": false,
+  "discountable": true,
+  "thumbnail": "http://localhost:9000/static/trailblazer-sneakers-thumb.jpg",
+  "collection_id": "pcol_01J7Y1K2L3M4N5O6P7Q8R9S0T",
+  "type_id": "ptyp_01J7Y1T2U3V4W5X6Y7Z8A9B0C",
+  "weight": null,
+  "length": null,
+  "height": null,
+  "width": null,
+  "hs_code": "64041100",
+  "origin_country": "IN",
+  "mid_code": null,
+  "material": null,
+  "created_at": "2026-07-31T10:40:00.000Z",
+  "updated_at": "2026-07-31T10:40:00.000Z",
+  "deleted_at": null,
+  "metadata": null,
+  "type": {
+    "id": "ptyp_01J7Y1T2U3V4W5X6Y7Z8A9B0C",
+    "value": "Sneakers",
+    "external_id": null,
+    "metadata": null,
+    "created_at": "2026-07-31T09:00:00.000Z",
+    "updated_at": "2026-07-31T09:00:00.000Z",
+    "deleted_at": null
+  },
+  "collection": {
+    "id": "pcol_01J7Y1K2L3M4N5O6P7Q8R9S0T",
+    "title": "Footwear Collection",
+    "handle": "footwear-collection",
+    "external_id": null,
+    "metadata": null,
+    "created_at": "2026-07-31T09:00:00.000Z",
+    "updated_at": "2026-07-31T09:00:00.000Z",
+    "deleted_at": null
+  },
+  "options": [
+    {
+      "id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+      "title": "Size",
+      "is_exclusive": false,
+      "metadata": null,
+      "created_at": "2026-07-31T10:40:00.000Z",
+      "updated_at": "2026-07-31T10:40:00.000Z",
+      "deleted_at": null,
+      "values": [
+        {
+          "id": "optval_01J7Y1E4F5G6H7I8J9K0L1M2N",
+          "value": "S",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        },
+        {
+          "id": "optval_01J7Y1F5G6H7I8J9K0L1M2N3O",
+          "value": "M",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        },
+        {
+          "id": "optval_01J7Y1G6H7I8J9K0L1M2N3O4P",
+          "value": "L",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "id": "ptag_01J7Y1G6H7I8J9K0L1M2N3O4P",
+      "value": "NEW-ARRIVAL",
+      "external_id": null,
+      "metadata": null,
+      "created_at": "2026-07-31T10:20:00.000Z",
+      "updated_at": "2026-07-31T10:20:00.000Z",
+      "deleted_at": null
+    }
+  ],
+  "images": [
+    {
+      "id": "img_01J7Y1H7I8J9K0L1M2N3O4P5Q",
+      "url": "http://localhost:9000/static/trailblazer-sneakers-front.jpg",
+      "metadata": null,
+      "rank": 0,
+      "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+      "created_at": "2026-07-31T10:40:00.000Z",
+      "updated_at": "2026-07-31T10:40:00.000Z",
+      "deleted_at": null
+    }
+  ],
+  "variants": [
+    {
+      "id": "variant_01J7Y1I8J9K0L1M2N3O4P5Q6R",
+      "title": "S",
+      "sku": "TBZ-SNEAKER-S",
+      "barcode": "8901234500019",
+      "ean": "8901234500019",
+      "upc": null,
+      "allow_backorder": true,
+      "manage_inventory": true,
+      "hs_code": null,
+      "origin_country": null,
+      "mid_code": null,
+      "material": null,
+      "weight": 420.0,
+      "length": null,
+      "height": null,
+      "width": null,
+      "metadata": null,
+      "variant_rank": 0,
+      "thumbnail": null,
+      "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+      "created_at": "2026-07-31T10:40:01.000Z",
+      "updated_at": "2026-07-31T10:40:01.000Z",
+      "deleted_at": null,
+      "images": [
+        {
+          "id": "img_01J7Y1H7I8J9K0L1M2N3O4P5Q",
+          "url": "http://localhost:9000/static/trailblazer-sneakers-front.jpg",
+          "metadata": null,
+          "rank": 0,
+          "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "options": [
+        {
+          "id": "optval_01J7Y1E4F5G6H7I8J9K0L1M2N",
+          "value": "S",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+          "option": {
+            "id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+            "title": "Size",
+            "is_exclusive": false,
+            "metadata": null,
+            "created_at": "2026-07-31T10:40:00.000Z",
+            "updated_at": "2026-07-31T10:40:00.000Z",
+            "deleted_at": null
+          },
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "prices": [
+        {
+          "id": "price_01J7Y1J9K0L1M2N3O4P5Q6R7S",
+          "amount": 1899,
+          "currency_code": "inr",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7Y1I8J9K0L1M2N3O4P5Q6R",
+          "created_at": "2026-07-31T10:40:02.000Z",
+          "updated_at": "2026-07-31T10:40:02.000Z",
+          "rules": {}
+        },
+        {
+          "id": "price_01J7Y1K0L1M2N3O4P5Q6R7S8T",
+          "amount": 24.0,
+          "currency_code": "usd",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7Y1I8J9K0L1M2N3O4P5Q6R",
+          "created_at": "2026-07-31T10:40:02.000Z",
+          "updated_at": "2026-07-31T10:40:02.000Z",
+          "rules": {}
+        }
+      ]
+    },
+    {
+      "id": "variant_01J7Y1L1M2N3O4P5Q6R7S8T9U",
+      "title": "M",
+      "sku": "TBZ-SNEAKER-M",
+      "barcode": "8901234500026",
+      "ean": "8901234500026",
+      "upc": null,
+      "allow_backorder": true,
+      "manage_inventory": true,
+      "hs_code": null,
+      "origin_country": null,
+      "mid_code": null,
+      "material": null,
+      "weight": 430.0,
+      "length": null,
+      "height": null,
+      "width": null,
+      "metadata": null,
+      "variant_rank": 1,
+      "thumbnail": null,
+      "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+      "created_at": "2026-07-31T10:40:01.000Z",
+      "updated_at": "2026-07-31T10:40:01.000Z",
+      "deleted_at": null,
+      "images": [
+        {
+          "id": "img_01J7Y1H7I8J9K0L1M2N3O4P5Q",
+          "url": "http://localhost:9000/static/trailblazer-sneakers-front.jpg",
+          "metadata": null,
+          "rank": 0,
+          "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "options": [
+        {
+          "id": "optval_01J7Y1F5G6H7I8J9K0L1M2N3O",
+          "value": "M",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+          "option": {
+            "id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+            "title": "Size",
+            "is_exclusive": false,
+            "metadata": null,
+            "created_at": "2026-07-31T10:40:00.000Z",
+            "updated_at": "2026-07-31T10:40:00.000Z",
+            "deleted_at": null
+          },
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "prices": [
+        {
+          "id": "price_01J7Y1M2N3O4P5Q6R7S8T9U0V",
+          "amount": 1949,
+          "currency_code": "inr",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7Y1L1M2N3O4P5Q6R7S8T9U",
+          "created_at": "2026-07-31T10:40:02.000Z",
+          "updated_at": "2026-07-31T10:40:02.000Z",
+          "rules": {}
+        },
+        {
+          "id": "price_01J7Y1N3O4P5Q6R7S8T9U0V1W",
+          "amount": 25.0,
+          "currency_code": "usd",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7Y1L1M2N3O4P5Q6R7S8T9U",
+          "created_at": "2026-07-31T10:40:02.000Z",
+          "updated_at": "2026-07-31T10:40:02.000Z",
+          "rules": {}
+        }
+      ]
+    },
+    {
+      "id": "variant_01J7Y1O4P5Q6R7S8T9U0V1W2X",
+      "title": "L",
+      "sku": null,
+      "barcode": null,
+      "ean": null,
+      "upc": null,
+      "allow_backorder": true,
+      "manage_inventory": true,
+      "hs_code": null,
+      "origin_country": null,
+      "mid_code": null,
+      "material": null,
+      "weight": 440.0,
+      "length": null,
+      "height": null,
+      "width": null,
+      "metadata": null,
+      "variant_rank": 2,
+      "thumbnail": null,
+      "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+      "created_at": "2026-07-31T10:40:01.000Z",
+      "updated_at": "2026-07-31T10:40:01.000Z",
+      "deleted_at": null,
+      "images": [
+        {
+          "id": "img_01J7Y1H7I8J9K0L1M2N3O4P5Q",
+          "url": "http://localhost:9000/static/trailblazer-sneakers-front.jpg",
+          "metadata": null,
+          "rank": 0,
+          "product_id": "prod_01J7Y1A1B2C3D4E5F6G7H8I9J",
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "options": [
+        {
+          "id": "optval_01J7Y1G6H7I8J9K0L1M2N3O4P",
+          "value": "L",
+          "rank": null,
+          "metadata": null,
+          "option_id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+          "option": {
+            "id": "opt_01J7Y1D3E4F5G6H7I8J9K0L1M",
+            "title": "Size",
+            "is_exclusive": false,
+            "metadata": null,
+            "created_at": "2026-07-31T10:40:00.000Z",
+            "updated_at": "2026-07-31T10:40:00.000Z",
+            "deleted_at": null
+          },
+          "created_at": "2026-07-31T10:40:00.000Z",
+          "updated_at": "2026-07-31T10:40:00.000Z",
+          "deleted_at": null
+        }
+      ],
+      "prices": [
+        {
+          "id": "price_01J7Y1P5Q6R7S8T9U0V1W2X3Y",
+          "amount": 1999,
+          "currency_code": "inr",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7Y1O4P5Q6R7S8T9U0V1W2X",
+          "created_at": "2026-07-31T10:40:02.000Z",
+          "updated_at": "2026-07-31T10:40:02.000Z",
+          "rules": {}
+        },
+        {
+          "id": "price_01J7Y1Q6R7S8T9U0V1W2X3Y4Z",
+          "amount": 26.0,
+          "currency_code": "usd",
+          "min_quantity": null,
+          "max_quantity": null,
+          "variant_id": "variant_01J7Y1O4P5Q6R7S8T9U0V1W2X",
+          "created_at": "2026-07-31T10:40:02.000Z",
+          "updated_at": "2026-07-31T10:40:02.000Z",
+          "rules": {}
+        }
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "pcat_01J7Y1O4P5Q6R7S8T9U0V1W2X",
+      "name": "Footwear",
+      "description": "Shoes and sneakers",
+      "handle": "footwear",
+      "mpath": "pcat_01J7Y1O4P5Q6R7S8T9U0V1W2X",
+      "is_active": true,
+      "is_internal": false,
+      "rank": 1,
+      "external_id": null,
+      "metadata": null,
+      "parent_category_id": null,
+      "parent_category": null,
+      "created_at": "2026-07-31T09:00:00.000Z",
+      "updated_at": "2026-07-31T09:00:00.000Z",
+      "deleted_at": null
+    }
+  ],
+  "sales_channels": [
+    {
+      "id": "sc_01TEST",
+      "name": "Default Sales Channel",
+      "description": "Created by Medusa",
+      "is_disabled": false,
+      "metadata": null,
+      "created_at": "2026-07-08T12:00:02.203Z",
+      "updated_at": "2026-07-08T12:00:02.203Z",
+      "deleted_at": null
+    }
+  ]
+}
