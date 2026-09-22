@@ -41,7 +41,6 @@
   "price_list",
   "column_break_prod",
   "upload_erpnext_items",
-  "update_medusa_item_on_update",
   "sync_new_item_as_published",
   "upload_variants_as_items",
   "section_product_status",
@@ -373,7 +372,7 @@
   },
   {
    "depends_on": "eval:doc.enabled",
-   "description": "Default warehouse on Items created from Medusa product import (not used for multi-location inventory push).",
+   "description": "Default warehouse for Items imported from Medusa. Not used for multi-location inventory synchronization.",
    "fieldname": "warehouse",
    "fieldtype": "Link",
    "label": "Default Warehouse",
@@ -412,14 +411,6 @@
    "fieldname": "upload_erpnext_items",
    "fieldtype": "Check",
    "label": "Upload New ERPNext Items to Medusa"
-  },
-  {
-   "default": "0",
-   "depends_on": "eval:doc.enabled && doc.upload_erpnext_items",
-   "description": "Push Item field changes to Medusa products.",
-   "fieldname": "update_medusa_item_on_update",
-   "fieldtype": "Check",
-   "label": "Update Medusa Products on Item Update"
   },
   {
    "default": "1",
