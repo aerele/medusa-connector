@@ -14,6 +14,17 @@ use_json_request_body = True
 
 required_apps = ["erpnext", "ecommerce_core"]
 
+# Shared Product Sync page (Ecommerce Core) provider registration.
+# "integration" must match the Module Def / Ecommerce Item.integration value.
+ecommerce_product_sync_providers = [
+	{
+		"integration": "Medusa Connector",
+		"label": "Medusa",
+		"settings_doctype": "Medusa Settings",
+		"adapter": "medusa_connector.product_sync.MedusaProductSyncAdapter",
+	}
+]
+
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
 # 	{
