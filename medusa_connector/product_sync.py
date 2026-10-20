@@ -16,6 +16,7 @@ single-sync failures itself.
 from __future__ import annotations
 
 import frappe
+from ecommerce_core.product_sync.adapter import ProductSyncAdapter
 
 from medusa_connector.constants import MODULE_NAME, SETTING_DOCTYPE
 from medusa_connector.medusa.product import ProductService
@@ -25,7 +26,7 @@ from medusa_connector.medusa_connector.page.medusa_sync_products.medusa_sync_pro
 )
 
 
-class MedusaProductSyncAdapter:
+class MedusaProductSyncAdapter(ProductSyncAdapter):
 	"""Contract implementation for ``ecommerce_core.product_sync``."""
 
 	def is_enabled(self) -> bool:
