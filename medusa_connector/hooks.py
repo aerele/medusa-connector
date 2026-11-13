@@ -16,12 +16,22 @@ required_apps = ["erpnext", "ecommerce_core"]
 
 # Shared Product Sync page (Ecommerce Core) provider registration.
 # "integration" must match the Module Def / Ecommerce Item.integration value.
-ecommerce_product_sync_providers = [
+ecommerce_product_import_providers = [
 	{
 		"integration": "Medusa Connector",
 		"label": "Medusa",
 		"settings_doctype": "Medusa Settings",
-		"adapter": "medusa_connector.product_sync.MedusaProductSyncAdapter",
+		"adapter": "medusa_connector.product_import.MedusaProductImportAdapter",
+	}
+]
+
+# Ecommerce Core dashboard provider registration (same integration value).
+ecommerce_dashboard_providers = [
+	{
+		"integration": "Medusa Connector",
+		"label": "Medusa",
+		"settings_doctype": "Medusa Settings",
+		"adapter": "medusa_connector.dashboard.MedusaDashboardAdapter",
 	}
 ]
 

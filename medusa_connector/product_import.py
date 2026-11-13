@@ -3,7 +3,7 @@
 
 """Product Sync adapter for the shared Ecommerce Core page.
 
-Registers this connector with the ``ecommerce_product_sync_providers`` hook
+Registers this connector with the ``ecommerce_product_import_providers`` hook
 (see hooks.py) so the shared Product Sync Desk page can list Medusa products
 and drive syncs. This is a thin facade over the existing product services and
 the sync logic used by the connector's own page — no new sync behavior.
@@ -16,7 +16,7 @@ single-sync failures itself.
 from __future__ import annotations
 
 import frappe
-from ecommerce_core.product_sync.adapter import ProductSyncAdapter
+from ecommerce_core.product_import.adapter import ProductImportAdapter
 
 from medusa_connector.constants import MODULE_NAME, SETTING_DOCTYPE
 from medusa_connector.medusa.product import ProductService
@@ -26,8 +26,8 @@ from medusa_connector.medusa_connector.page.medusa_sync_products.medusa_sync_pro
 )
 
 
-class MedusaProductSyncAdapter(ProductSyncAdapter):
-	"""Contract implementation for ``ecommerce_core.product_sync``."""
+class MedusaProductImportAdapter(ProductImportAdapter):
+	"""Contract implementation for ``ecommerce_core.product_import``."""
 
 	def is_enabled(self) -> bool:
 		return bool(frappe.db.get_single_value(SETTING_DOCTYPE, "enabled"))
@@ -44,12 +44,16 @@ class MedusaProductSyncAdapter(ProductSyncAdapter):
 					"name": product.get("title"),
 					"sku": product.get("sku"),
 					"variants": product.get("variants") or [],
+					"updated_at": product.get("updated_at"),
 				}
 				for product in result.get("products") or []
 			],
 			"total": total,
 			"next_cursor": f"o:{offset + limit}" if offset + limit < total else None,
 		}
+
+	def get_product_updated_at(self, product: dict):
+		return product.get("updated_at")
 
 	def get_provider_count(self) -> int:
 		page = ProductService().list_products(limit=1, offset=0)
